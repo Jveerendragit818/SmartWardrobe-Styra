@@ -1,0 +1,35 @@
+[
+  {
+    "id": "sample-item-001",
+    "user_id": "demo-user-001",
+    "name": "Blue cotton T-shirt",
+    "category": "t_shirt",
+    "color": "blue",
+    "season": "summer",
+    "occasion": ["casual", "college"],
+    "image_path": "demo-user-001/sample-item-001.jpg",
+    "value_source": "user_confirmed"
+  },
+  {
+    "id": "sample-item-002",
+    "user_id": "demo-user-001",
+    "name": "Black jeans",
+    "category": "jeans",
+    "color": "black",
+    "season": "all_season",
+    "occasion": ["casual", "college"],
+    "image_path": "demo-user-001/sample-item-002.jpg",
+    "value_source": "user_confirmed"
+  },
+  {
+    "id": "sample-item-003",
+    "user_id": "demo-user-001",
+    "name": "Green jacket",
+    "category": "jacket",
+    "color": "green",
+    "season": "winter",
+    "occasion": ["casual", "travel"],
+    "image_path": "demo-user-001/sample-item-003.jpg",
+    "value_source": "user_confirmed"
+  }
+]
