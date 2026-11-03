@@ -1,0 +1,43 @@
+{
+  "image_path": "samples/dress_multicolor_01.jpg",
+  "model": "wargoninnovation/wargon-clothing-classifier",
+  "predicted_attributes": {
+    "category": {
+      "value": null,
+      "candidates": [
+        { "label": "LABEL_3", "score": 0.546 },
+        { "label": "LABEL_25", "score": 0.041 },
+        { "label": "LABEL_23", "score": 0.039 }
+      ],
+      "status": "unmapped"
+    },
+    "color": {
+      "value": null,
+      "score": null,
+      "status": "unsupported"
+    },
+    "pattern": {
+      "value": null,
+      "score": null,
+      "status": "unsupported"
+    },
+    "season": {
+      "value": null,
+      "score": null,
+      "status": "not_predicted"
+    },
+    "occasion": {
+      "value": null,
+      "score": null,
+      "status": "not_predicted"
+    }
+  },
+  "user_confirmed_attributes": {
+    "category": null,
+    "color": null,
+    "pattern": null,
+    "season": null,
+    "occasion": null
+  },
+  "review_required": true
+}
