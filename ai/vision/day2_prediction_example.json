@@ -1,0 +1,30 @@
+{
+  "image_path": "demo-user-001/new-item.jpg",
+  "model": "wargoninnovation/wargon-clothing-classifier",
+  "predicted_attributes": {
+    "category": {
+      "value": null,
+      "model_label": "LABEL_17",
+      "score": 0.639
+    },
+    "color": {
+      "value": null,
+      "score": null
+    },
+    "season": {
+      "value": null,
+      "score": null
+    },
+    "occasion": {
+      "value": null,
+      "score": null
+    }
+  },
+  "user_confirmed_attributes": {
+    "category": null,
+    "color": null,
+    "season": null,
+    "occasion": null
+  },
+  "review_required": true
+}
