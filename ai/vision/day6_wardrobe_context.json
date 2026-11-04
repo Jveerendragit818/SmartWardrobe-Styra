@@ -1,0 +1,9 @@
+{
+  "wardrobe_items": [
+    {
+      "item_id": "sample-item-001",
+      "category": "t_shirt",
+      "color": "light_blue"
+    }
+  ]
+}
