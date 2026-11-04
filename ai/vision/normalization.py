@@ -1,26 +1,32 @@
 ALIASES = {
     "category": {
         "t shirt": "t_shirt",
-        "jeans": "jeans",
+        "tshirt": "t_shirt",
+        "shirt": "shirt",
         "jean": "jeans",
-        "jacket": "jacket"
+        "jeans": "jeans",
+        "dress": "dress",
+        "jacket": "jacket",
     },
     "color": {
-        "blue": "blue",
         "black": "black",
-        "green": "green"
+        "blue": "blue",
+        "light blue": "light_blue",
+        "green": "green",
+        "navy": "navy",
+        "navy blue": "navy",
+        "red": "red",
+        "multicolor": "multicolor",
+        "multi color": "multicolor",
+        "multicolour": "multicolor",
     },
     "season": {
         "summer": "summer",
         "winter": "winter",
-        "all season": "all_season"
-    }
+        "all season": "all_season",# Keep the season values already in your file here.
+    },
 }
-
-
 def normalize_attribute(field, value, *, user_confirmed):
-    """Normalize an agreed field; never approve an unconfirmed AI guess."""
-
     if field not in ALIASES:
         raise ValueError(f"Unsupported field: {field}")
 
@@ -31,8 +37,13 @@ def normalize_attribute(field, value, *, user_confirmed):
         return {"value": None, "status": "missing"}
 
     cleaned = " ".join(
-        value.strip().lower().replace("_", " ").replace("-", " ").split()
+        value.strip()
+        .lower()
+        .replace("_", " ")
+        .replace("-", " ")
+        .split()
     )
+
     normalized = ALIASES[field].get(cleaned)
 
     if normalized is None:
