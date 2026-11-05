@@ -32,12 +32,29 @@ WEIGHTS = {
     "occasion": 0.25,
     "weather": 0.20,
     "preference": 0.15,
-    "novelty": 0.10
+    "novelty": 0.10,
 }
 
 
 # ==========================================================
-# 2. COLOR COMPATIBILITY
+# 2. OCCASION FILTERING
+# ==========================================================
+
+def is_suitable_for_occasion(item, occasion):
+    """Allow items matching the occasion or having unknown occasions."""
+
+    occasions = item.get("occasion") or []
+
+    if not occasion or not occasions:
+        return True
+
+    return occasion.lower() in {
+        value.lower() for value in occasions
+    }
+
+
+# ==========================================================
+# 3. COLOR COMPATIBILITY
 # ==========================================================
 
 def color_score(color1, color2):
@@ -86,17 +103,20 @@ def outfit_color_score(outfit):
 
 
 # ==========================================================
-# 3. OCCASION SUITABILITY
+# 4. OCCASION SUITABILITY
 # ==========================================================
 
 def occasion_score(outfit, occasion):
-    """Check how suitable an outfit is for an occasion."""
+    """Calculate how suitable an outfit is for an occasion."""
 
     if not occasion or not outfit:
         return 0.5
 
     matches = sum(
-        occasion in (item.get("occasion") or [])
+        occasion.lower() in {
+            value.lower()
+            for value in (item.get("occasion") or [])
+        }
         for item in outfit
     )
 
@@ -104,7 +124,7 @@ def occasion_score(outfit, occasion):
 
 
 # ==========================================================
-# 4. WEATHER SUITABILITY
+# 5. WEATHER SUITABILITY
 # ==========================================================
 
 def weather_score(outfit, weather=None):
@@ -114,15 +134,15 @@ def weather_score(outfit, weather=None):
         return 0.5
 
     current_season = weather.get("season")
-    condition = weather.get("condition", "").lower()
+    condition = (weather.get("condition") or "").lower()
 
     if not current_season:
         return 0.5
 
+    current_season = current_season.lower()
     scores = []
 
     for item in outfit:
-
         item_season = item.get("season")
 
         if not item_season:
@@ -137,11 +157,12 @@ def weather_score(outfit, weather=None):
         else:
             item_score = 0.3
 
-        # Rain suitability adjustment.
         if condition in {"rain", "rainy"}:
-            if item["category"] == "shoes":
-                if item.get("weather_suitable") is False:
-                    item_score = min(item_score, 0.2)
+            if (
+                item["category"] == "shoes"
+                and item.get("weather_suitable") is False
+            ):
+                item_score = min(item_score, 0.2)
 
         scores.append(item_score)
 
@@ -149,7 +170,7 @@ def weather_score(outfit, weather=None):
 
 
 # ==========================================================
-# 5. USER STYLE PREFERENCES
+# 6. USER STYLE PREFERENCES
 # ==========================================================
 
 def preference_score(outfit, user_preferences=None):
@@ -158,20 +179,24 @@ def preference_score(outfit, user_preferences=None):
     if not user_preferences or not outfit:
         return 0.5
 
-    preferred_styles = set(
-        user_preferences.get("styles", [])
-    )
+    preferred_styles = {
+        value.lower()
+        for value in user_preferences.get("styles", [])
+    }
 
     preferred_colors = {
-        color.lower()
-        for color in user_preferences.get("colors", [])
+        value.lower()
+        for value in user_preferences.get("colors", [])
     }
 
     scores = []
 
     for item in outfit:
+        item_styles = {
+            value.lower()
+            for value in (item.get("style") or [])
+        }
 
-        item_styles = set(item.get("style") or [])
         item_color = item.get("color")
 
         matches = []
@@ -183,20 +208,20 @@ def preference_score(outfit, user_preferences=None):
 
         if preferred_colors:
             matches.append(
-                1.0 if item_color and item_color.lower()
-                in preferred_colors else 0.0
+                1.0
+                if item_color and item_color.lower() in preferred_colors
+                else 0.0
             )
 
-        if matches:
-            scores.append(sum(matches) / len(matches))
-        else:
-            scores.append(0.5)
+        scores.append(
+            sum(matches) / len(matches) if matches else 0.5
+        )
 
-    return sum(scores) / len(scores) if scores else 0.5
+    return sum(scores) / len(scores)
 
 
 # ==========================================================
-# 6. OUTFIT NOVELTY AND REPEAT AVOIDANCE
+# 7. OUTFIT NOVELTY
 # ==========================================================
 
 def novelty_score(outfit, recent_outfits=None):
@@ -215,7 +240,6 @@ def novelty_score(outfit, recent_outfits=None):
     similarities = []
 
     for previous in recent_outfits:
-
         previous_ids = set(previous)
 
         if not previous_ids:
@@ -225,7 +249,6 @@ def novelty_score(outfit, recent_outfits=None):
         intersection = current_ids & previous_ids
 
         similarity = len(intersection) / len(union)
-
         similarities.append(similarity)
 
     if not similarities:
@@ -235,7 +258,7 @@ def novelty_score(outfit, recent_outfits=None):
 
 
 # ==========================================================
-# 7. TOTAL OUTFIT SCORE
+# 8. TOTAL OUTFIT SCORE
 # ==========================================================
 
 def calculate_outfit_score(
@@ -243,28 +266,16 @@ def calculate_outfit_score(
     occasion="college",
     weather=None,
     user_preferences=None,
-    recent_outfits=None
+    recent_outfits=None,
 ):
     """Calculate weighted recommendation score."""
 
     scores = {
         "color": outfit_color_score(outfit),
-
-        "occasion": occasion_score(
-            outfit, occasion
-        ),
-
-        "weather": weather_score(
-            outfit, weather
-        ),
-
-        "preference": preference_score(
-            outfit, user_preferences
-        ),
-
-        "novelty": novelty_score(
-            outfit, recent_outfits
-        )
+        "occasion": occasion_score(outfit, occasion),
+        "weather": weather_score(outfit, weather),
+        "preference": preference_score(outfit, user_preferences),
+        "novelty": novelty_score(outfit, recent_outfits),
     }
 
     total = sum(
@@ -276,35 +287,39 @@ def calculate_outfit_score(
 
 
 # ==========================================================
-# 8. OUTFIT GENERATION
+# 9. OUTFIT GENERATION
 # ==========================================================
 
 def generate_outfit_candidates(wardrobe, occasion):
     """Generate valid combinations from available wardrobe items."""
 
-    tops = [
+    suitable_items = [
         item for item in wardrobe
+        if is_suitable_for_occasion(item, occasion)
+    ]
+
+    tops = [
+        item for item in suitable_items
         if item["category"] in TOPS
     ]
 
     bottoms = [
-        item for item in wardrobe
+        item for item in suitable_items
         if item["category"] in BOTTOMS
     ]
 
     dresses = [
-        item for item in wardrobe
+        item for item in suitable_items
         if item["category"] in DRESSES
     ]
 
     shoes = [
-        item for item in wardrobe
+        item for item in suitable_items
         if item["category"] in SHOES
-        and occasion in (item.get("occasion") or [])
     ]
 
     jackets = [
-        item for item in wardrobe
+        item for item in suitable_items
         if item["category"] in LAYERS
     ]
 
@@ -322,7 +337,7 @@ def generate_outfit_candidates(wardrobe, occasion):
 
     for base in candidates:
 
-        shoe_options = shoes or [None]
+        shoe_options = [None] + shoes
         jacket_options = [None] + jackets
 
         for shoe in shoe_options:
@@ -347,7 +362,7 @@ def generate_outfit_candidates(wardrobe, occasion):
 
 
 # ==========================================================
-# 9. MAIN RECOMMENDATION ENGINE
+# 10. MAIN RECOMMENDATION ENGINE
 # ==========================================================
 
 def recommend_outfits(
@@ -356,25 +371,31 @@ def recommend_outfits(
     limit=5,
     weather=None,
     user_preferences=None,
-    recent_outfits=None
+    recent_outfits=None,
 ):
     """
     Generate, score and rank personalized outfit recommendations.
     """
 
+    if isinstance(limit, bool) or not isinstance(limit, int) or limit < 0:
+        raise ValueError("limit must be a non-negative integer")
+
+    if limit == 0:
+        return []
+
+    if not isinstance(occasion, str) or not occasion.strip():
+        raise ValueError("occasion must be a non-empty string")
+
     # Validate wardrobe records.
     wardrobe = prepare_wardrobe(wardrobe)
-
-    if not isinstance(limit, int) or limit < 0:
-        raise ValueError("limit must be a non-negative integer")
 
     if not wardrobe:
         return []
 
-    # Generate candidate outfits.
+    # Generate outfit candidates.
     candidates = generate_outfit_candidates(
         wardrobe,
-        occasion
+        occasion.lower(),
     )
 
     results = []
@@ -387,7 +408,7 @@ def recommend_outfits(
             occasion=occasion,
             weather=weather,
             user_preferences=user_preferences,
-            recent_outfits=recent_outfits
+            recent_outfits=recent_outfits,
         )
 
         # Generate recommendation explanations.
@@ -396,19 +417,16 @@ def recommend_outfits(
             f"Occasion suitability: {scores['occasion']:.2f}",
             f"Weather suitability: {scores['weather']:.2f}",
             f"Style preference: {scores['preference']:.2f}",
-            f"Outfit novelty: {scores['novelty']:.2f}"
+            f"Outfit novelty: {scores['novelty']:.2f}",
         ]
 
         results.append({
             "item_ids": [
                 item["id"] for item in outfit
             ],
-
             "score": total_score,
-
             "component_scores": scores,
-
-            "reasons": reasons
+            "reasons": reasons,
         })
 
     # Remove duplicate combinations.
@@ -428,7 +446,7 @@ def recommend_outfits(
     # Rank highest-scoring outfits first.
     results.sort(
         key=lambda item: item["score"],
-        reverse=True
+        reverse=True,
     )
 
     return results[:limit]

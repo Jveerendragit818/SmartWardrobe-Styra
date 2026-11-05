@@ -1,5 +1,4 @@
-
-TOPS = {"tshirt", "shirt"}
+﻿TOPS = {"tshirt", "shirt"}
 BOTTOMS = {"trousers", "jeans", "skirt"}
 DRESSES = {"dress"}
 SHOES = {"shoes"}
@@ -9,7 +8,7 @@ ALLOWED_CATEGORIES = TOPS | BOTTOMS | DRESSES | SHOES | LAYERS
 
 
 def is_valid_combination(categories):
-    """Check whether an outfit has a valid basic structure."""
+    """Require a valid base outfit and footwear."""
 
     categories = list(categories)
     category_set = set(categories)
@@ -20,11 +19,12 @@ def is_valid_combination(categories):
     if not category_set <= ALLOWED_CATEGORIES:
         return False
 
-    # A dress is a complete base outfit.
+    if "shoes" not in category_set:
+        return False
+
     if "dress" in category_set:
         return not bool(category_set & (TOPS | BOTTOMS))
 
-    # Other outfits need a top and a bottom.
     return (
         bool(category_set & TOPS)
         and bool(category_set & BOTTOMS)
