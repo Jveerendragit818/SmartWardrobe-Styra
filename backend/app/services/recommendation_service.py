@@ -1,15 +1,13 @@
-
-"""
+﻿"""
 SmartWardrobe Recommendation Service.
 
 Connects the authenticated user's Supabase wardrobe
-with the AI recommendation engine.
+with the rule-based recommendation engine.
 """
 
 from fastapi import HTTPException, status
 
 from ai.recommendations.engine import recommend_outfits
-
 from app.api.v1.routes.wardrobe import supabase_request
 
 
@@ -21,12 +19,8 @@ async def get_recommendations(
     user_preferences: dict | None = None,
     recent_outfits: list | None = None,
 ):
-    """
-    Fetch the authenticated user's wardrobe and
-    generate personalized outfit recommendations.
-    """
+    """Recommend explainable outfits from the signed-in user's items."""
 
-    # Fetch only the signed-in user's wardrobe.
     wardrobe = await supabase_request(
         "GET",
         "clothing_items",
@@ -39,9 +33,11 @@ async def get_recommendations(
     )
 
     if not wardrobe:
-        return []
+        return {
+            "outfits": [],
+            "message": "Your wardrobe is empty. Add clothing items to get suggestions.",
+        }
 
-    # Generate outfit recommendations.
     try:
         recommendations = recommend_outfits(
             wardrobe=wardrobe,
@@ -51,11 +47,48 @@ async def get_recommendations(
             user_preferences=user_preferences,
             recent_outfits=recent_outfits,
         )
-
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
         )
 
-    return recommendations
+    if not recommendations:
+        return {
+            "outfits": [],
+            "message": (
+                f"No complete outfit matches '{occasion}'. Add a top and bottom "
+                "or a dress, plus shoes tagged for that occasion."
+            ),
+        }
+
+    items_by_id = {
+        str(item["id"]): item
+        for item in wardrobe
+        if item.get("id") is not None
+    }
+
+    outfits = []
+    for recommendation in recommendations:
+        outfit_items = []
+        for item_id in recommendation.get("item_ids", []):
+            item = items_by_id.get(str(item_id))
+            if item is not None:
+                outfit_items.append({
+                    "id": str(item["id"]),
+                    "name": item.get("name"),
+                    "category": item.get("category"),
+                    "color": item.get("color"),
+                    "season": item.get("season"),
+                    "occasion": item.get("occasion") or [],
+                    "image_path": item.get("image_path"),
+                })
+
+        reasons = recommendation.get("reasons") or []
+        outfits.append({
+            **recommendation,
+            "items": outfit_items,
+            "reason": "; ".join(reasons[:3]),
+        })
+
+    return {"outfits": outfits, "message": None}
