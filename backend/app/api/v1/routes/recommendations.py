@@ -1,4 +1,3 @@
-
 from fastapi import APIRouter, Depends
 
 from app.core.auth import get_current_user
@@ -17,17 +16,13 @@ async def generate_recommendations(
     request: RecommendationRequest,
     current_user: dict = Depends(get_current_user),
 ):
-    """
-    Generate personalized outfit recommendations
-    for the authenticated user.
-    """
+    """Generate recommendations for the authenticated user."""
 
     recommendations = await get_recommendations(
         current_user=current_user,
         occasion=request.occasion,
         limit=request.limit,
         weather=request.weather,
-        user_preferences=request.user_preferences,
         recent_outfits=request.recent_outfits,
     )
 

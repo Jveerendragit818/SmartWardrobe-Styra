@@ -1,4 +1,4 @@
-
+  import Navbar from "./components/shared/navbar";
 import Link from "next/link";
 import Button from "@/components/shared/Button";
 import Card from "@/components/shared/Card";
@@ -31,32 +31,12 @@ const features = [
 ];
 
 export default function Home() {
-  return (
-    <div className="min-h-screen bg-[#F3F4F6] text-[#17233F]">
+  return  (  
+  <div className="min-h-screen bg-[#F3F4F6] text-[#17233F]">
+
       {/* Navigation */}
-      <header className="border-b border-gray-200 bg-white">
-        <nav className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-4 sm:px-8">
-          <Link
-            href="/"
-            className="text-2xl font-bold tracking-tight"
-          >
-            SmartWardrobe
-          </Link>
+      <Navbar />
 
-          <div className="flex flex-wrap items-center gap-3">
-            <Link
-              href="/user/dashboard"
-              className="text-sm font-medium hover:text-[#77649B]"
-            >
-              Dashboard
-            </Link>
-
-            <Link href="/user/wardrobe">
-              <Button size="small">My Wardrobe</Button>
-            </Link>
-          </div>
-        </nav>
-      </header>
 
       {/* Hero */}
       <main>
@@ -133,3 +113,5 @@ export default function Home() {
     </div>
   );
 }
+
+

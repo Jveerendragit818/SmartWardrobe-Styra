@@ -2,7 +2,7 @@
 SmartWardrobe Recommendation Service.
 
 Connects the authenticated user's Supabase wardrobe
-with the rule-based recommendation engine.
+and saved preferences with the rule-based recommendation engine.
 """
 
 from fastapi import HTTPException, status
@@ -16,10 +16,11 @@ async def get_recommendations(
     occasion: str = "college",
     limit: int = 5,
     weather: dict | None = None,
-    user_preferences: dict | None = None,
     recent_outfits: list | None = None,
 ):
     """Recommend explainable outfits from the signed-in user's items."""
+
+    user_id = current_user["user_id"]
 
     wardrobe = await supabase_request(
         "GET",
@@ -27,7 +28,7 @@ async def get_recommendations(
         current_user,
         params={
             "select": "*",
-            "user_id": f"eq.{current_user['user_id']}",
+            "user_id": f"eq.{user_id}",
             "order": "created_at.desc",
         },
     )
@@ -38,13 +39,36 @@ async def get_recommendations(
             "message": "Your wardrobe is empty. Add clothing items to get suggestions.",
         }
 
+    saved_preferences_rows = await supabase_request(
+        "GET",
+        "user_preferences",
+        current_user,
+        params={
+            "select": (
+                "preferred_colors,preferred_styles,"
+                "usual_occasions,disliked_colors"
+            ),
+            "user_id": f"eq.{user_id}",
+        },
+    )
+    saved_preferences = (
+        saved_preferences_rows[0] if saved_preferences_rows else {}
+    )
+
+    engine_preferences = {
+        "colors": saved_preferences.get("preferred_colors") or [],
+        "styles": saved_preferences.get("preferred_styles") or [],
+        "usual_occasions": saved_preferences.get("usual_occasions") or [],
+        "disliked_colors": saved_preferences.get("disliked_colors") or [],
+    }
+
     try:
         recommendations = recommend_outfits(
             wardrobe=wardrobe,
             occasion=occasion,
             limit=limit,
             weather=weather,
-            user_preferences=user_preferences,
+            user_preferences=engine_preferences,
             recent_outfits=recent_outfits,
         )
     except ValueError as exc:
@@ -71,6 +95,7 @@ async def get_recommendations(
     outfits = []
     for recommendation in recommendations:
         outfit_items = []
+
         for item_id in recommendation.get("item_ids", []):
             item = items_by_id.get(str(item_id))
             if item is not None:
