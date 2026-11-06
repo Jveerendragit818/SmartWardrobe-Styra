@@ -2,11 +2,8 @@
 """
 SmartWardrobe Recommendation Data Contract.
 
-Normalizes confirmed clothing attributes from the vision
-module and prepares saved wardrobe records for recommendations.
-
-Only user-confirmed or user-corrected attributes are trusted
-when explicit attribute source information is available.
+Normalizes clothing attributes and ensures explicitly AI-predicted
+attributes are not treated as user-confirmed data.
 """
 
 VALID_CATEGORIES = {
@@ -23,6 +20,11 @@ VALID_ATTRIBUTE_SOURCES = {
     "user_confirmed",
     "user_corrected",
     "unknown",
+}
+
+TRUSTED_ATTRIBUTE_SOURCES = {
+    "user_confirmed",
+    "user_corrected",
 }
 
 CATEGORY_ALIASES = {
@@ -64,7 +66,7 @@ def _normalize_text(value):
 
 
 def normalize_category(category):
-    """Normalize category names from vision and wardrobe records."""
+    """Normalize supported clothing category names."""
     normalized = _normalize_text(category)
 
     if normalized is None:
@@ -104,14 +106,7 @@ def normalize_season(season):
 
 
 def normalize_prediction_attribute(field, prediction):
-    """
-    Process one vision prediction.
-
-    Predictions are suggestions only. They are not trusted until
-    the user confirms them.
-
-    Returns a normalized value and review status.
-    """
+    """Process one vision prediction. Predictions require user review."""
     if field not in {"category", "color", "season"}:
         raise ValueError(f"Unsupported field: {field}")
 
@@ -123,13 +118,20 @@ def normalize_prediction_attribute(field, prediction):
     }:
         return {"value": None, "status": prediction["status"]}
 
-    value = prediction.get("value")
-
-    if value is None:
+    if prediction.get("value") is None:
         return {"value": None, "status": "needs_review"}
 
-    # Never accept an AI prediction as confirmed automatically.
     return {"value": None, "status": "needs_review"}
+
+
+def _is_trusted(field, sources):
+    """Check whether an explicitly sourced attribute is user-confirmed."""
+    if sources is None:
+        return True
+
+    source = sources.get(field, "unknown")
+
+    return source in TRUSTED_ATTRIBUTE_SOURCES
 
 
 def resolve_item(item):
@@ -142,6 +144,28 @@ def resolve_item(item):
     if not resolved.get("id"):
         return None
 
+    raw_sources = resolved.get("attribute_sources")
+
+    # Preserve compatibility with legacy records that have no source data.
+    has_source_metadata = isinstance(raw_sources, dict)
+
+    sources = raw_sources if has_source_metadata else None
+
+    if sources is not None:
+        resolved["attribute_sources"] = {
+            key: (
+                value
+                if isinstance(value, str)
+                and value in VALID_ATTRIBUTE_SOURCES
+                else "unknown"
+            )
+            for key, value in sources.items()
+        }
+
+    # Category is essential for outfit compatibility.
+    if has_source_metadata and not _is_trusted("category", sources):
+        return None
+
     category = normalize_category(resolved.get("category"))
 
     if category is None:
@@ -149,12 +173,20 @@ def resolve_item(item):
 
     resolved["category"] = category
 
-    # Normalize color and season without inventing missing values.
-    resolved["color"] = normalize_color(resolved.get("color"))
-    resolved["season"] = normalize_season(resolved.get("season"))
+    # Explicitly predicted or unknown attributes are not trusted.
+    if has_source_metadata and not _is_trusted("color", sources):
+        resolved["color"] = None
+    else:
+        resolved["color"] = normalize_color(resolved.get("color"))
 
-    for field in ("pattern",):
-        resolved[field] = _normalize_text(resolved.get(field))
+    if has_source_metadata and not _is_trusted("season", sources):
+        resolved["season"] = None
+    else:
+        resolved["season"] = normalize_season(resolved.get("season"))
+
+    resolved["pattern"] = _normalize_text(
+        resolved.get("pattern")
+    )
 
     for field in ("occasion", "style"):
         value = resolved.get(field, [])
@@ -170,21 +202,6 @@ def resolve_item(item):
             for entry in value
             if (cleaned := _normalize_text(entry)) is not None
         ]
-
-    sources = resolved.get("attribute_sources") or {}
-
-    if not isinstance(sources, dict):
-        sources = {}
-
-    resolved["attribute_sources"] = {
-        key: (
-            value
-            if isinstance(value, str)
-            and value in VALID_ATTRIBUTE_SOURCES
-            else "unknown"
-        )
-        for key, value in sources.items()
-    }
 
     return resolved
 

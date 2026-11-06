@@ -295,3 +295,64 @@ def test_legacy_preferences():
     }
 
     assert preference_score(outfit, preferences) == 1.0
+
+
+# DAY 7: SAVED OUTFIT DATA INTEGRITY TESTS
+
+def test_ai_predicted_color_is_not_trusted():
+    item = {
+        "id": "day7_001",
+        "category": "shirt",
+        "color": "blue",
+        "attribute_sources": {
+            "category": "user_confirmed",
+            "color": "ai_predicted",
+        },
+    }
+
+    prepared = prepare_wardrobe([item])
+
+    assert len(prepared) == 1
+    assert prepared[0]["color"] is None
+
+
+def test_ai_predicted_category_is_rejected():
+    item = {
+        "id": "day7_002",
+        "category": "shirt",
+        "color": "blue",
+        "attribute_sources": {
+            "category": "ai_predicted",
+            "color": "user_confirmed",
+        },
+    }
+
+    assert prepare_wardrobe([item]) == []
+
+
+def test_missing_image_does_not_reject_item():
+    item = {
+        "id": "day7_003",
+        "category": "shirt",
+        "color": "blue",
+        "image_path": None,
+        "attribute_sources": {
+            "category": "user_confirmed",
+            "color": "user_confirmed",
+        },
+    }
+
+    prepared = prepare_wardrobe([item])
+
+    assert len(prepared) == 1
+    assert prepared[0]["id"] == "day7_003"
+    assert prepared[0]["image_path"] is None
+
+
+def test_missing_item_id_is_rejected():
+    item = {
+        "category": "shirt",
+        "color": "blue",
+    }
+
+    assert prepare_wardrobe([item]) == []
