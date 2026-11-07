@@ -124,6 +124,37 @@ async def update_wardrobe_item(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Image path must be inside the signed-in user's folder.",
         )
+        
+    if "confirmed_attributes" in payload:
+        new_confirmations = payload["confirmed_attributes"]
+
+        if new_confirmations is None:
+            payload["confirmed_attributes"] = {}
+        else:
+            existing_rows = await supabase_request(
+                "GET",
+                "clothing_items",
+                current_user,
+                params={
+                    "select": "confirmed_attributes",
+                    "id": f"eq.{item_id}",
+                    "user_id": f"eq.{current_user['user_id']}",
+                },
+            )
+
+            if not existing_rows:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Wardrobe item not found.",
+                )
+
+            existing_confirmations = (
+                existing_rows[0].get("confirmed_attributes") or {}
+            )
+            payload["confirmed_attributes"] = {
+                **existing_confirmations,
+                **new_confirmations,
+            }
 
     payload["updated_at"] = datetime.now(timezone.utc).isoformat()
 

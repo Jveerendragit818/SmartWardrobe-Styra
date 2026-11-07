@@ -7,7 +7,7 @@ const stats = [
 
 export default function AdminDashboard() {
   return (
-    <div className="min-h-screen bg-slate-50 p-6 md:p-8">
+    <main className="min-h-screen bg-slate-50 p-6 md:p-8">
       <h1 className="text-2xl font-bold text-slate-900">
         Admin Dashboard
       </h1>
@@ -25,6 +25,7 @@ export default function AdminDashboard() {
             <h2 className="text-sm font-medium text-slate-600">
               {stat.title}
             </h2>
+
             <p className="mt-4 text-3xl font-bold text-slate-900">
               {stat.value}
             </p>
@@ -36,10 +37,11 @@ export default function AdminDashboard() {
         <h2 className="text-lg font-semibold text-slate-900">
           Recent Activity
         </h2>
+
         <p className="mt-3 text-sm text-slate-500">
           No recent activity available.
         </p>
       </section>
-    </div>
+    </main>
   );
 }
