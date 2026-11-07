@@ -25,7 +25,8 @@ export default function AddClothingPage() {
   const [name, setName] = useState("");
   const [category, setCategory] = useState("");
   const [color, setColor] = useState("");
-  const [season, setSeason] = useState("");
+ const [season, setSeason] = useState("");
+ const [occasion, setOccasion] = useState("");
   const [photo, setPhoto] = useState<string | null>(null);
   const [message, setMessage] = useState("");
 
@@ -176,6 +177,30 @@ export default function AddClothingPage() {
                 <option value="All Seasons">All Seasons</option>
               </select>
             </div>
+
+<div>
+  <label
+    htmlFor="clothing-occasion"
+    className="mb-2 block text-sm font-semibold"
+  >
+    Occasion
+  </label>
+
+  <select
+    id="clothing-occasion"
+    value={occasion}
+    onChange={(event) => setOccasion(event.target.value)}
+    className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 focus:border-[#8872B3] focus:outline-none"
+  >
+    <option value="">Select occasion</option>
+    <option value="Casual">Casual</option>
+    <option value="Office">Office</option>
+    <option value="Party">Party</option>
+    <option value="Wedding">Wedding</option>
+    <option value="Festival">Festival</option>
+    <option value="Sports">Sports</option>
+  </select>
+</div>
 
             {message && (
               <p
