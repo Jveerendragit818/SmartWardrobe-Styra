@@ -2,30 +2,17 @@
 """
 SmartWardrobe Recommendation Data Contract.
 
-Normalizes and prepares Supabase wardrobe records
-before sending them to the recommendation engine.
+Normalizes clothing attributes and ensures explicitly AI-predicted
+attributes are not treated as user-confirmed data.
 """
 
-# ==========================================================
-# 1. VALID VALUES
-# ==========================================================
-
 VALID_CATEGORIES = {
-    "tshirt",
-    "shirt",
-    "trousers",
-    "jeans",
-    "skirt",
-    "dress",
-    "jacket",
-    "shoes",
+    "tshirt", "shirt", "trousers", "jeans",
+    "skirt", "dress", "jacket", "shoes",
 }
 
 VALID_SEASONS = {
-    "summer",
-    "winter",
-    "monsoon",
-    "all_season",
+    "summer", "winter", "monsoon", "all_season",
 }
 
 VALID_ATTRIBUTE_SOURCES = {
@@ -35,38 +22,57 @@ VALID_ATTRIBUTE_SOURCES = {
     "unknown",
 }
 
-
-# ==========================================================
-# 2. CATEGORY ALIASES
-# ==========================================================
+TRUSTED_ATTRIBUTE_SOURCES = {
+    "user_confirmed",
+    "user_corrected",
+}
 
 CATEGORY_ALIASES = {
     "t-shirt": "tshirt",
     "t shirt": "tshirt",
+    "t_shirt": "tshirt",
     "tee": "tshirt",
     "pants": "trousers",
+    "pant": "trousers",
     "trouser": "trousers",
     "sneaker": "shoes",
     "sneakers": "shoes",
 }
 
+COLOR_ALIASES = {
+    "navy blue": "navy",
+    "light blue": "light_blue",
+    "multi color": "multicolor",
+    "multi colour": "multicolor",
+    "multicolour": "multicolor",
+}
 
-# ==========================================================
-# 3. CATEGORY NORMALIZATION
-# ==========================================================
+SEASON_ALIASES = {
+    "all season": "all_season",
+    "all-season": "all_season",
+}
 
-def normalize_category(category):
-    """Normalize clothing category names."""
 
-    if not isinstance(category, str):
+def _normalize_text(value):
+    """Convert a non-empty string to normalized lowercase text."""
+    if not isinstance(value, str):
         return None
 
-    normalized = category.strip().lower()
-
-    normalized = CATEGORY_ALIASES.get(
-        normalized,
-        normalized
+    cleaned = " ".join(
+        value.strip().lower().replace("_", " ").split()
     )
+
+    return cleaned or None
+
+
+def normalize_category(category):
+    """Normalize supported clothing category names."""
+    normalized = _normalize_text(category)
+
+    if normalized is None:
+        return None
+
+    normalized = CATEGORY_ALIASES.get(normalized, normalized)
 
     if normalized not in VALID_CATEGORIES:
         return None
@@ -74,131 +80,140 @@ def normalize_category(category):
     return normalized
 
 
-# ==========================================================
-# 4. RESOLVE ONE WARDROBE ITEM
-# ==========================================================
+def normalize_color(color):
+    """Normalize common color names without guessing unknown colors."""
+    normalized = _normalize_text(color)
+
+    if normalized is None:
+        return None
+
+    return COLOR_ALIASES.get(normalized, normalized)
+
+
+def normalize_season(season):
+    """Normalize supported season values."""
+    normalized = _normalize_text(season)
+
+    if normalized is None:
+        return None
+
+    normalized = SEASON_ALIASES.get(normalized, normalized)
+
+    if normalized not in VALID_SEASONS:
+        return None
+
+    return normalized
+
+
+def normalize_prediction_attribute(field, prediction):
+    """Process one vision prediction. Predictions require user review."""
+    if field not in {"category", "color", "season"}:
+        raise ValueError(f"Unsupported field: {field}")
+
+    if not isinstance(prediction, dict):
+        return {"value": None, "status": "missing"}
+
+    if prediction.get("status") in {
+        "unsupported", "not_predicted", "unmapped"
+    }:
+        return {"value": None, "status": prediction["status"]}
+
+    if prediction.get("value") is None:
+        return {"value": None, "status": "needs_review"}
+
+    return {"value": None, "status": "needs_review"}
+
+
+def _is_trusted(field, sources):
+    """Check whether an explicitly sourced attribute is user-confirmed."""
+    if sources is None:
+        return True
+
+    source = sources.get(field, "unknown")
+
+    return source in TRUSTED_ATTRIBUTE_SOURCES
+
 
 def resolve_item(item):
     """Validate and prepare one saved clothing item."""
-
-    # Ensure the input is a dictionary.
     if not isinstance(item, dict):
         return None
 
     resolved = item.copy()
 
-    # Every item must have an ID.
     if not resolved.get("id"):
         return None
 
-    # Normalize category.
-    category = normalize_category(
-        resolved.get("category")
-    )
+    raw_sources = resolved.get("attribute_sources")
+
+    # Preserve compatibility with legacy records that have no source data.
+    has_source_metadata = isinstance(raw_sources, dict)
+
+    sources = raw_sources if has_source_metadata else None
+
+    if sources is not None:
+        resolved["attribute_sources"] = {
+            key: (
+                value
+                if isinstance(value, str)
+                and value in VALID_ATTRIBUTE_SOURCES
+                else "unknown"
+            )
+            for key, value in sources.items()
+        }
+
+    # Category is essential for outfit compatibility.
+    if has_source_metadata and not _is_trusted("category", sources):
+        return None
+
+    category = normalize_category(resolved.get("category"))
 
     if category is None:
         return None
 
     resolved["category"] = category
 
-    # ======================================================
-    # Normalize optional text attributes.
-    # ======================================================
+    # Explicitly predicted or unknown attributes are not trusted.
+    if has_source_metadata and not _is_trusted("color", sources):
+        resolved["color"] = None
+    else:
+        resolved["color"] = normalize_color(resolved.get("color"))
 
-    for field in ("color", "pattern", "season"):
+    if has_source_metadata and not _is_trusted("season", sources):
+        resolved["season"] = None
+    else:
+        resolved["season"] = normalize_season(resolved.get("season"))
 
-        value = resolved.get(field)
+    resolved["pattern"] = _normalize_text(
+        resolved.get("pattern")
+    )
+
+    for field in ("occasion", "style"):
+        value = resolved.get(field, [])
 
         if isinstance(value, str):
-            resolved[field] = value.strip().lower() or None
-        else:
-            resolved[field] = None
+            value = [value]
 
-    # ======================================================
-    # Preserve missing attributes safely.
-    # ======================================================
+        if not isinstance(value, list):
+            value = []
 
-    resolved.setdefault("color", None)
-    resolved.setdefault("pattern", None)
-    resolved.setdefault("season", None)
-    resolved.setdefault("occasion", [])
-    resolved.setdefault("style", [])
-
-    # ======================================================
-    # Validate season.
-    # ======================================================
-
-    if resolved["season"] not in (None, *VALID_SEASONS):
-        resolved["season"] = None
-
-    # ======================================================
-    # Normalize occasion.
-    # ======================================================
-
-    if isinstance(resolved["occasion"], str):
-        resolved["occasion"] = [resolved["occasion"]]
-
-    if not isinstance(resolved["occasion"], list):
-        resolved["occasion"] = []
-
-    resolved["occasion"] = [
-        value.strip().lower()
-        for value in resolved["occasion"]
-        if isinstance(value, str) and value.strip()
-    ]
-
-    # ======================================================
-    # Normalize style.
-    # ======================================================
-
-    if isinstance(resolved["style"], str):
-        resolved["style"] = [resolved["style"]]
-
-    if not isinstance(resolved["style"], list):
-        resolved["style"] = []
-
-    resolved["style"] = [
-        value.strip().lower()
-        for value in resolved["style"]
-        if isinstance(value, str) and value.strip()
-    ]
-
-    # ======================================================
-    # Preserve attribute source metadata.
-    # ======================================================
-
-    sources = resolved.get("attribute_sources") or {}
-
-    if not isinstance(sources, dict):
-        sources = {}
-
-    resolved["attribute_sources"] = {
-        key: (
-            value
-            if isinstance(value, str)
-            and value in VALID_ATTRIBUTE_SOURCES
-            else "unknown"
-        )
-        for key, value in sources.items()
-    }
+        resolved[field] = [
+            cleaned
+            for entry in value
+            if (cleaned := _normalize_text(entry)) is not None
+        ]
 
     return resolved
 
 
-# ==========================================================
-# 5. PREPARE COMPLETE WARDROBE
-# ==========================================================
-
 def prepare_wardrobe(wardrobe):
-    """Validate and prepare all saved wardrobe items."""
-
+    """Validate and prepare all saved clothing items."""
     if not isinstance(wardrobe, list):
         return []
 
     prepared = []
 
     for item in wardrobe:
-
         resolved = resolve_item(item)
 
         if resolved is not None:
