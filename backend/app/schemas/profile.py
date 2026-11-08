@@ -1,11 +1,13 @@
 ﻿from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ProfileUpdate(BaseModel):
-    display_name: str | None = None
+    model_config = ConfigDict(extra="forbid")
+
+    display_name: str | None = Field(default=None, max_length=80)
 
 
 class ProfileResponse(BaseModel):
