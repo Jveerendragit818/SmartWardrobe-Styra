@@ -8,8 +8,8 @@ import {
   Shirt,
   Pencil,
   Trash2,
+  Sparkles,
 } from "lucide-react";
-
 // Sample clothing data
 const clothingItems = [
   {
@@ -80,13 +80,25 @@ export default function WardrobePage() {
             </p>
           </div>
 
-          <Link
-            href="/user/wardrobe/add"
-            className="inline-flex items-center gap-2 rounded-lg bg-[#172A4B] px-5 py-3 text-white hover:bg-[#283F65]"
-          >
-            <Plus size={20} />
-            Add Clothing
-          </Link>
+             
+<div className="flex flex-wrap items-center gap-3">
+  <Link
+    href="/user/wardrobe/add"
+    className="inline-flex items-center gap-2 rounded-lg bg-[#172A4B] px-5 py-3 text-white hover:bg-[#283F65]"
+  >
+    <Plus size={20} />
+    Add Clothing
+  </Link>
+
+  <Link
+    href="/user/wardrobe/recognition"
+    className="inline-flex items-center gap-2 rounded-lg bg-[#EEE9FA] px-5 py-3 font-medium text-[#172A4B] hover:bg-[#DDD4F3]"
+  >
+    <Sparkles size={20} />
+    AI Recognition
+  </Link>
+</div>
+
         </div>
 
         {/* Clothing collection */}
