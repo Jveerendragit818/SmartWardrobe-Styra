@@ -13,6 +13,7 @@ export default function AdminLayout({
 
   const menuItems = [
     { name: "Dashboard", href: "/admin/dashboard" },
+    { name: "Users", href: "/admin/users" },
     { name: "AI Monitoring", href: "/admin/ai-monitoring" },
     { name: "Categories", href: "/admin/categories" },
     { name: "Clothing", href: "/admin/clothing" },
