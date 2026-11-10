@@ -8,7 +8,9 @@ from app.api.v1.routes import (
     recommendations,
     preferences,
     chatbot,
+    saved_outfits,
 )
+
 
 api_router = APIRouter()
 
@@ -29,3 +31,6 @@ api_router.include_router(preferences.router)
 
 # AI fashion chatbot
 api_router.include_router(chatbot.router)
+
+# Saved outfit management
+api_router.include_router(saved_outfits.router)
