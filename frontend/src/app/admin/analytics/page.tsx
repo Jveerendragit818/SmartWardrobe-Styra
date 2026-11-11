@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 
-export default function AnalyticsPage() {
+export default function  AnalyticsPage() {
   const [filter, setFilter] = useState("This Week");
 
   const stats = [
