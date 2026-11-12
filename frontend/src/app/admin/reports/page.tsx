@@ -1,16 +1,28 @@
-// Day 8 - M2 - Admin Reports
+// Day 9 - M2 - Admin Reports with API
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { getAdminReports } from "@/app/lib/api";
 
 export default function ReportsPage() {
   const [filter, setFilter] = useState("All");
+  const [reports, setReports] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  const reports = [
-    { id: 1, title: "Total Users", value: "125", change: "+12 this week", type: "Users" },
-    { id: 2, title: "Total Outfits", value: "340", change: "+45 this week", type: "Outfits" },
-    { id: 3, title: "AI Suggestions Used", value: "890", change: "+120 this week", type: "AI" },
-    { id: 4, title: "Trip Plans Created", value: "56", change: "+8 this week", type: "Trips" },
-  ];
+  useEffect(() => {
+    getAdminReports()
+      .then((data) => {
+        setReports(data);
+        setLoading(false);
+      })
+      .catch(() => {
+        setError("Failed to load reports. Please try again.");
+        setLoading(false);
+      });
+  }, []);
+
+  if (loading) return <div style={{ padding: "20px", color: "black" }}>Loading reports...</div>;
+  if (error) return <div style={{ padding: "20px", color: "red" }}>{error}</div>;
 
   const filtered = filter === "All" ? reports : reports.filter((r) => r.type === filter);
 
@@ -18,7 +30,6 @@ export default function ReportsPage() {
     <div style={{ padding: "20px", fontFamily: "sans-serif", color: "black" }}>
       <h1 style={{ color: "black" }}>Admin Reports</h1>
       <p style={{ color: "black" }}>View platform usage, growth and AI performance</p>
-
       <div style={{ margin: "20px 0" }}>
         <select value={filter} onChange={(e) => setFilter(e.target.value)} style={{ padding: "10px", borderRadius: "8px", background: "white", color: "black" }}>
           <option value="All">All Reports</option>
@@ -28,7 +39,6 @@ export default function ReportsPage() {
           <option value="Trips">Trips</option>
         </select>
       </div>
-
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
         {filtered.map((r) => (
           <div key={r.id} style={{ background: "white", padding: "20px", borderRadius: "12px", border: "1px solid #ddd", color: "black" }}>
@@ -39,7 +49,6 @@ export default function ReportsPage() {
           </div>
         ))}
       </div>
-
       <div style={{ marginTop: "20px", background: "white", padding: "20px", borderRadius: "12px", border: "1px solid #ddd", color: "black" }}>
         <h3 style={{ color: "black" }}>Summary</h3>
         <p style={{ color: "black" }}>• Most active feature: AI Outfit Suggestions</p>
