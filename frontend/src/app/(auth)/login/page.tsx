@@ -3,32 +3,39 @@
 
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import Button from "@/components/shared/Button";
 import Card from "@/components/shared/Card";
 import Input from "@/components/shared/Input";
+import { getSupabase } from "@/lib/supabase";
 
 export default function LoginPage() {
+  const router = useRouter();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+
   const [errors, setErrors] = useState<{
     email?: string;
     password?: string;
   }>({});
+
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(
+    event: FormEvent<HTMLFormElement>
+  ) {
     event.preventDefault();
 
-    const newErrors: {
-      email?: string;
-      password?: string;
-    } = {};
+    const newErrors: typeof errors = {};
 
     if (!email.trim()) {
       newErrors.email = "Email is required";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+    } else if (
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
+    ) {
       newErrors.email = "Enter a valid email address";
     }
 
@@ -46,13 +53,34 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      // TODO: Connect to Supabase Auth or the agreed backend.
-      // Do not navigate to the dashboard until authentication succeeds.
+      const supabase = getSupabase();
+
+      const { data, error } =
+        await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        });
+
+      if (error) {
+        setMessage(error.message);
+        return;
+      }
+
+      if (!data.session) {
+        setMessage("Unable to create a login session.");
+        return;
+      }
+
+      setMessage("Login successful!");
+
+      router.replace("/user/dashboard");
+
+    } catch (error) {
       setMessage(
-        "Login form is ready. Authentication connection is pending."
+        error instanceof Error
+          ? error.message
+          : "Something went wrong. Please try again."
       );
-    } catch {
-      setMessage("Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -61,6 +89,7 @@ export default function LoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#F3F4F6] px-4 py-12">
       <div className="w-full max-w-md">
+
         <div className="mb-8 text-center">
           <Link
             href="/"
@@ -75,6 +104,7 @@ export default function LoginPage() {
         </div>
 
         <Card padding="large" shadow="medium">
+
           <h1 className="text-center text-2xl font-bold text-[#17233F]">
             Welcome Back
           </h1>
@@ -83,7 +113,12 @@ export default function LoginPage() {
             Sign in to manage your wardrobe.
           </p>
 
-          <form onSubmit={handleSubmit} noValidate className="mt-8 space-y-5">
+          <form
+            onSubmit={handleSubmit}
+            noValidate
+            className="mt-8 space-y-5"
+          >
+
             <Input
               id="email"
               name="email"
@@ -147,12 +182,13 @@ export default function LoginPage() {
               className="w-full"
               disabled={loading}
             >
-              {loading ? "Please wait..." : "Sign In"}
+              {loading ? "Signing in..." : "Sign In"}
             </Button>
+
           </form>
 
           <p className="mt-6 text-center text-sm text-gray-600">
-            Don't have an account?{" "}
+            Don&apos;t have an account?{" "}
             <Link
               href="/register"
               className="font-semibold text-[#17233F] hover:underline"
@@ -160,12 +196,15 @@ export default function LoginPage() {
               Sign Up
             </Link>
           </p>
+
         </Card>
 
         <p className="mt-6 text-center text-sm text-gray-500">
           © SmartWardrobe
         </p>
+
       </div>
     </main>
   );
 }
+

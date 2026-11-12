@@ -3,15 +3,20 @@
 
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import Button from "@/components/shared/Button";
 import Card from "@/components/shared/Card";
 import Input from "@/components/shared/Input";
+import { getSupabase } from "@/lib/supabase";
 
 export default function RegisterPage() {
+  const router = useRouter();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] =
+    useState("");
 
   const [errors, setErrors] = useState<{
     email?: string;
@@ -22,27 +27,34 @@ export default function RegisterPage() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(
+    event: FormEvent<HTMLFormElement>
+  ) {
     event.preventDefault();
 
     const newErrors: typeof errors = {};
 
     if (!email.trim()) {
       newErrors.email = "Email is required";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+    } else if (
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
+    ) {
       newErrors.email = "Enter a valid email address";
     }
 
     if (!password) {
       newErrors.password = "Password is required";
     } else if (password.length < 8) {
-      newErrors.password = "Password must contain at least 8 characters";
+      newErrors.password =
+        "Password must contain at least 8 characters";
     }
 
     if (!confirmPassword) {
-      newErrors.confirmPassword = "Please confirm your password";
+      newErrors.confirmPassword =
+        "Please confirm your password";
     } else if (password !== confirmPassword) {
-      newErrors.confirmPassword = "Passwords do not match";
+      newErrors.confirmPassword =
+        "Passwords do not match";
     }
 
     setErrors(newErrors);
@@ -55,13 +67,34 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      // TODO: Connect to Supabase Auth or the agreed backend.
-      // Do not create a fake account or redirect before success.
+      const supabase = getSupabase();
+
+      const { data, error } =
+        await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+        });
+
+      if (error) {
+        setMessage(error.message);
+        return;
+      }
+
+      if (data.session) {
+        setMessage("Account created successfully!");
+        router.replace("/user/dashboard");
+      } else {
+        setMessage(
+          "If registration was successful, check your email for a confirmation link before signing in."
+        );
+      }
+
+    } catch (error) {
       setMessage(
-        "Signup form is ready. Authentication connection is pending."
+        error instanceof Error
+          ? error.message
+          : "Something went wrong. Please try again."
       );
-    } catch {
-      setMessage("Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -70,6 +103,7 @@ export default function RegisterPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#F3F4F6] px-4 py-12">
       <div className="w-full max-w-md">
+
         <div className="mb-8 text-center">
           <Link
             href="/"
@@ -84,6 +118,7 @@ export default function RegisterPage() {
         </div>
 
         <Card padding="large" shadow="medium">
+
           <h1 className="text-center text-2xl font-bold text-[#17233F]">
             Create Account
           </h1>
@@ -97,6 +132,7 @@ export default function RegisterPage() {
             noValidate
             className="mt-8 space-y-5"
           >
+
             <Input
               id="register-email"
               name="email"
@@ -170,8 +206,11 @@ export default function RegisterPage() {
               className="w-full"
               disabled={loading}
             >
-              {loading ? "Please wait..." : "Create Account"}
+              {loading
+                ? "Creating account..."
+                : "Create Account"}
             </Button>
+
           </form>
 
           <p className="mt-6 text-center text-sm text-gray-600">
@@ -183,8 +222,10 @@ export default function RegisterPage() {
               Sign In
             </Link>
           </p>
+
         </Card>
       </div>
     </main>
   );
 }
+
