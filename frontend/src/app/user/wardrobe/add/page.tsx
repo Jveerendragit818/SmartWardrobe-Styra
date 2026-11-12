@@ -1,75 +1,235 @@
 
 "use client";
 
-import { useState, type ChangeEvent, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import Link from "next/link";
-import { ArrowLeft, ImagePlus } from "lucide-react";
+import { useRouter } from "next/navigation";
+import {
+  ArrowLeft,
+  ImagePlus,
+  Loader2,
+  AlertCircle,
+  CheckCircle2,
+} from "lucide-react";
+
 import Button from "@/components/shared/Button";
 import Card from "@/components/shared/Card";
 import Input from "@/components/shared/Input";
+import { apiRequest } from "@/lib/api";
 
 const categories = [
-  "Tops",
-  "Shirts",
-  "T-Shirts",
-  "Denims",
-  "Bottoms",
-  "Dresses",
-  "Ethnic Wear",
-  "Active Wear",
-  "Footwear",
-  "Accessories",
+  { label: "T-Shirts", value: "tshirt" },
+  { label: "Shirts", value: "shirt" },
+  { label: "Trousers", value: "trousers" },
+  { label: "Jeans", value: "jeans" },
+  { label: "Skirts", value: "skirt" },
+  { label: "Dresses", value: "dress" },
+  { label: "Jackets", value: "jacket" },
+  { label: "Footwear", value: "shoes" },
 ];
 
+const seasons = [
+  { label: "Summer", value: "summer" },
+  { label: "Winter", value: "winter" },
+  { label: "Rainy", value: "monsoon" },
+  { label: "All Seasons", value: "all_season" },
+];
+
+const occasions = [
+  "Casual",
+  "College",
+  "Office",
+  "Party",
+  "Festival",
+  "Wedding",
+  "Travel",
+];
+
+type UploadResponse = {
+  data: {
+    image_path: string;
+    bucket: string;
+  } | null;
+  error: string | null;
+};
+
+type ClothingResponse = {
+  data: {
+    id: string;
+    name: string;
+    confirmed_attributes?: Record<string, string>;
+  } | null;
+  error: string | null;
+};
+
 export default function AddClothingPage() {
+  const router = useRouter();
+
   const [name, setName] = useState("");
   const [category, setCategory] = useState("");
   const [color, setColor] = useState("");
- const [season, setSeason] = useState("");
- const [occasion, setOccasion] = useState("");
-  const [photo, setPhoto] = useState<string | null>(null);
-  const [message, setMessage] = useState("");
+  const [season, setSeason] = useState("all_season");
+  const [occasion, setOccasion] = useState("");
 
-  function handlePhoto(event: ChangeEvent<HTMLInputElement>) {
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [preview, setPreview] = useState("");
+
+  const [confirmed, setConfirmed] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  function handlePhotoChange(
+    event: React.ChangeEvent<HTMLInputElement>
+  ) {
     const file = event.target.files?.[0];
+
     if (!file) return;
 
-    if (!["image/jpeg", "image/png"].includes(file.type)) {
-      setMessage("Please select a JPG or PNG image.");
+    setError("");
+
+    const allowedTypes = [
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+    ];
+
+    if (!allowedTypes.includes(file.type)) {
+      setError("Please select a JPG, PNG or WebP image.");
+      event.target.value = "";
       return;
     }
 
     if (file.size > 5 * 1024 * 1024) {
-      setMessage("Please select an image smaller than 5 MB.");
+      setError("Image size must be 5 MB or smaller.");
+      event.target.value = "";
       return;
     }
 
+    setPhoto(file);
+
     const reader = new FileReader();
+
     reader.onload = () => {
-      if (typeof reader.result === "string") {
-        setPhoto(reader.result);
-        setMessage("");
-      }
+      setPreview(String(reader.result));
     };
+
     reader.readAsDataURL(file);
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(
+    event: FormEvent<HTMLFormElement>
+  ) {
     event.preventDefault();
 
-    if (!name.trim() || !category || !color.trim() || !season) {
-      setMessage("Please fill in all required fields.");
+    if (loading) return;
+
+    setError("");
+    setSuccess("");
+
+    if (!name.trim() || !category || !color.trim()) {
+      setError(
+        "Please enter the clothing name, category and color."
+      );
       return;
     }
 
-    setMessage(
-      "Form validated successfully! Saving clothing items will be available after backend integration."
-    );
+    if (!confirmed) {
+      setError(
+        "Please confirm that the category and color are correct."
+      );
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      let uploadedImagePath: string | null = null;
+
+      // Upload clothing image if selected
+      if (photo) {
+        const formData = new FormData();
+
+        formData.append("file", photo);
+
+        const uploadResponse =
+          await apiRequest<UploadResponse>(
+            "/wardrobe/images",
+            {
+              method: "POST",
+              body: formData,
+            }
+          );
+
+        if (
+          uploadResponse.error ||
+          !uploadResponse.data?.image_path
+        ) {
+          throw new Error(
+            uploadResponse.error ||
+              "Could not upload the clothing image."
+          );
+        }
+
+        uploadedImagePath =
+          uploadResponse.data.image_path;
+      }
+
+      // Save clothing with confirmed attributes
+      const clothingData = {
+        name: name.trim(),
+        category: category,
+        color: color.trim().toLowerCase(),
+        season: season,
+        occasion: occasion
+          ? [occasion.toLowerCase()]
+          : [],
+        image_path: uploadedImagePath,
+
+        confirmed_attributes: {
+          category: category,
+          color: color.trim().toLowerCase(),
+        },
+      };
+
+      const response =
+        await apiRequest<ClothingResponse>(
+          "/wardrobe",
+          {
+            method: "POST",
+            body: JSON.stringify(clothingData),
+          }
+        );
+
+      if (response.error || !response.data) {
+        throw new Error(
+          response.error ||
+            "Could not save the clothing item."
+        );
+      }
+
+      setSuccess(
+        "Clothing item saved successfully!"
+      );
+
+      router.push("/user/wardrobe");
+
+    } catch (error) {
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Something went wrong. Please try again."
+      );
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
-    <div className="min-h-screen bg-[#F3F4F6] px-5 py-10 text-[#17233F] sm:px-8">
-      <main className="mx-auto max-w-3xl">
+    <main className="min-h-screen bg-gray-50 p-4 text-[#172A4B] sm:p-6">
+
+      <div className="mx-auto max-w-3xl">
+
         <Link
           href="/user/wardrobe"
           className="mb-6 inline-flex items-center gap-2 text-sm font-medium hover:underline"
@@ -78,153 +238,322 @@ export default function AddClothingPage() {
           Back to Wardrobe
         </Link>
 
-        <h1 className="text-3xl font-bold">Add Clothing Item</h1>
-        <p className="mb-8 mt-3 text-gray-600">
-          Add a new item to your digital wardrobe.
+        <h1 className="text-3xl font-bold text-[#172A4B]">
+          Add Clothing Item
+        </h1>
+
+        <p className="mt-2 text-gray-600">
+          Add a new clothing item to your digital wardrobe.
         </p>
 
-        <Card shadow="small">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <label className="mb-3 block text-sm font-semibold">
-                Clothing Photo
-              </label>
+        <div className="mt-8">
 
-              <label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#C9B9E8] bg-[#F8F5FC] p-8 text-center">
-                {photo ? (
-                  <img
-                    src={photo}
-                    alt="Selected clothing preview"
-                    className="max-h-56 rounded-lg object-contain"
-                  />
-                ) : (
-                  <>
-                    <ImagePlus
-                      size={42}
-                      className="mb-3 text-[#77649B]"
+          <Card>
+
+            <form
+              onSubmit={handleSubmit}
+              className="space-y-6"
+            >
+
+              {/* Clothing photo */}
+              <div>
+
+                <label className="mb-2 block text-sm font-semibold">
+                  Clothing Photo (Optional)
+                </label>
+
+                <label className="flex min-h-48 cursor-pointer flex-col items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-[#C9B9E8] bg-[#F3F0FA] p-4">
+
+                  {preview ? (
+
+                    <img
+                      src={preview}
+                      alt="Clothing preview"
+                      className="h-48 w-full object-contain"
                     />
-                    <span className="font-medium">
-                      Click to upload clothing photo
-                    </span>
-                    <span className="mt-2 text-xs text-gray-500">
-                      JPG or PNG, maximum 5 MB
-                    </span>
-                  </>
+
+                  ) : (
+
+                    <>
+                      <ImagePlus
+                        size={42}
+                        className="text-[#8170C4]"
+                      />
+
+                      <span className="mt-3 text-sm font-medium">
+                        Click to upload a photo
+                      </span>
+
+                      <span className="mt-1 text-xs text-gray-500">
+                        JPG, PNG or WebP · Maximum 5 MB
+                      </span>
+                    </>
+
+                  )}
+
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={handlePhotoChange}
+                    disabled={loading}
+                    className="hidden"
+                  />
+
+                </label>
+
+                {photo && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPhoto(null);
+                      setPreview("");
+                    }}
+                    disabled={loading}
+                    className="mt-2 text-sm text-red-600 hover:underline"
+                  >
+                    Remove Photo
+                  </button>
                 )}
 
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png"
-                  onChange={handlePhoto}
-                  className="sr-only"
-                />
-              </label>
-            </div>
+              </div>
 
-            <Input
-              label="Clothing Name"
-              placeholder="e.g. Blue Denim Jacket"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-            />
+              {/* Clothing name */}
+              <Input
+                label="Clothing Name"
+                value={name}
+                onChange={(event) =>
+                  setName(event.target.value)
+                }
+                placeholder="Example: White Shirt"
+                maxLength={120}
+                required
+                disabled={loading}
+              />
 
-            <div>
-              <label
-                htmlFor="clothing-category"
-                className="mb-2 block text-sm font-semibold"
-              >
-                Category
-              </label>
-              <select
-                id="clothing-category"
-                value={category}
-                onChange={(event) => setCategory(event.target.value)}
-                className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 focus:border-[#8872B3] focus:outline-none"
-              >
-                <option value="">Select category</option>
-                {categories.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
+              {/* Category */}
+              <div>
+
+                <label
+                  htmlFor="category"
+                  className="mb-2 block text-sm font-semibold"
+                >
+                  Category
+                </label>
+
+                <select
+                  id="category"
+                  value={category}
+                  onChange={(event) => {
+                    setCategory(event.target.value);
+                    setConfirmed(false);
+                  }}
+                  required
+                  disabled={loading}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-[#8170C4]"
+                >
+
+                  <option value="">
+                    Select category
                   </option>
-                ))}
-              </select>
-            </div>
 
-            <Input
-              label="Color"
-              placeholder="e.g. Navy Blue"
-              value={color}
-              onChange={(event) => setColor(event.target.value)}
-            />
+                  {categories.map((item) => (
+                    <option
+                      key={item.value}
+                      value={item.value}
+                    >
+                      {item.label}
+                    </option>
+                  ))}
 
-            <div>
-              <label
-                htmlFor="clothing-season"
-                className="mb-2 block text-sm font-semibold"
-              >
-                Season
-              </label>
-              <select
-                id="clothing-season"
-                value={season}
-                onChange={(event) => setSeason(event.target.value)}
-                className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 focus:border-[#8872B3] focus:outline-none"
-              >
-                <option value="">Select season</option>
-                <option value="Summer">Summer</option>
-                <option value="Winter">Winter</option>
-                <option value="Rainy">Rainy</option>
-                <option value="All Seasons">All Seasons</option>
-              </select>
-            </div>
+                </select>
 
-<div>
-  <label
-    htmlFor="clothing-occasion"
-    className="mb-2 block text-sm font-semibold"
-  >
-    Occasion
-  </label>
+              </div>
 
-  <select
-    id="clothing-occasion"
-    value={occasion}
-    onChange={(event) => setOccasion(event.target.value)}
-    className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 focus:border-[#8872B3] focus:outline-none"
-  >
-    <option value="">Select occasion</option>
-    <option value="Casual">Casual</option>
-    <option value="Office">Office</option>
-    <option value="Party">Party</option>
-    <option value="Wedding">Wedding</option>
-    <option value="Festival">Festival</option>
-    <option value="Sports">Sports</option>
-  </select>
-</div>
+              {/* Color */}
+              <Input
+                label="Color"
+                value={color}
+                onChange={(event) => {
+                  setColor(event.target.value);
+                  setConfirmed(false);
+                }}
+                placeholder="Example: White"
+                required
+                disabled={loading}
+              />
 
-            {message && (
-              <p
-                role="status"
-                className="rounded-lg bg-[#E9E2F5] px-4 py-3 text-sm"
-              >
-                {message}
-              </p>
-            )}
+              {/* Season */}
+              <div>
 
-            <div className="flex flex-wrap gap-4">
-              <Button size="medium" type="submit">
-                Save Clothing Item
-              </Button>
+                <label
+                  htmlFor="season"
+                  className="mb-2 block text-sm font-semibold"
+                >
+                  Season
+                </label>
 
-              <Link href="/user/wardrobe">
-                <Button variant="outline" size="medium" type="button">
-                  Cancel
+                <select
+                  id="season"
+                  value={season}
+                  onChange={(event) =>
+                    setSeason(event.target.value)
+                  }
+                  disabled={loading}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-[#8170C4]"
+                >
+
+                  {seasons.map((item) => (
+                    <option
+                      key={item.value}
+                      value={item.value}
+                    >
+                      {item.label}
+                    </option>
+                  ))}
+
+                </select>
+
+              </div>
+
+              {/* Occasion */}
+              <div>
+
+                <label
+                  htmlFor="occasion"
+                  className="mb-2 block text-sm font-semibold"
+                >
+                  Occasion (Optional)
+                </label>
+
+                <select
+                  id="occasion"
+                  value={occasion}
+                  onChange={(event) =>
+                    setOccasion(event.target.value)
+                  }
+                  disabled={loading}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-[#8170C4]"
+                >
+
+                  <option value="">
+                    Select occasion
+                  </option>
+
+                  {occasions.map((item) => (
+                    <option
+                      key={item}
+                      value={item.toLowerCase()}
+                    >
+                      {item}
+                    </option>
+                  ))}
+
+                </select>
+
+              </div>
+
+              {/* Confirm attributes */}
+              <div className="rounded-xl border border-[#DCD3EF] bg-[#F3F0FA] p-4">
+
+                <label className="flex cursor-pointer items-start gap-3">
+
+                  <input
+                    type="checkbox"
+                    checked={confirmed}
+                    onChange={(event) =>
+                      setConfirmed(event.target.checked)
+                    }
+                    disabled={loading}
+                    className="mt-1 h-4 w-4 accent-[#172A4B]"
+                  />
+
+                  <div>
+
+                    <p className="text-sm font-semibold">
+                      Confirm Clothing Details
+                    </p>
+
+                    <p className="mt-1 text-sm text-gray-600">
+                      I confirm that the selected category
+                      and color are correct. These details
+                      can be used by Styra for personalized
+                      outfit suggestions.
+                    </p>
+
+                  </div>
+
+                </label>
+
+              </div>
+
+              {/* Error message */}
+              {error && (
+                <div
+                  role="alert"
+                  className="flex items-start gap-2 rounded-lg bg-red-50 p-4 text-sm text-red-700"
+                >
+                  <AlertCircle
+                    size={18}
+                    className="shrink-0"
+                  />
+                  {error}
+                </div>
+              )}
+
+              {/* Success message */}
+              {success && (
+                <div
+                  role="status"
+                  className="flex items-center gap-2 rounded-lg bg-green-50 p-4 text-sm text-green-700"
+                >
+                  <CheckCircle2 size={18} />
+                  {success}
+                </div>
+              )}
+
+              {/* Form buttons */}
+              <div className="flex flex-wrap gap-3">
+
+                <Button
+                  type="submit"
+                  size="medium"
+                  disabled={loading}
+                >
+
+                  <span className="inline-flex items-center gap-2">
+
+                    {loading && (
+                      <Loader2
+                        size={18}
+                        className="animate-spin"
+                      />
+                    )}
+
+                    {loading
+                      ? "Saving..."
+                      : "Save Clothing Item"}
+
+                  </span>
+
                 </Button>
-              </Link>
-            </div>
-          </form>
-        </Card>
-      </main>
-    </div>
+
+                <Link
+                  href="/user/wardrobe"
+                  className="inline-flex items-center justify-center rounded-lg border border-[#172A4B] px-5 py-2.5 text-sm font-medium hover:bg-[#F3F0FA]"
+                >
+                  Cancel
+                </Link>
+
+              </div>
+
+            </form>
+
+          </Card>
+
+        </div>
+
+      </div>
+
+    </main>
   );
 }
