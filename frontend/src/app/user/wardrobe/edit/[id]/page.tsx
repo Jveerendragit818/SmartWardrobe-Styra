@@ -2,6 +2,7 @@
 "use client";
 
 import {
+  Suspense,
   useEffect,
   useState,
   type FormEvent,
@@ -13,6 +14,7 @@ import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
   Loader2,
+  Save,
   AlertCircle,
   CheckCircle2,
 } from "lucide-react";
@@ -20,72 +22,77 @@ import {
 import Button from "@/components/shared/Button";
 import Card from "@/components/shared/Card";
 import Input from "@/components/shared/Input";
+
 import { apiRequest } from "@/lib/api";
 
-const categories = [
-  { label: "T-Shirts", value: "tshirt" },
-  { label: "Shirts", value: "shirt" },
-  { label: "Trousers", value: "trousers" },
-  { label: "Jeans", value: "jeans" },
-  { label: "Skirts", value: "skirt" },
-  { label: "Dresses", value: "dress" },
-  { label: "Jackets", value: "jacket" },
-  { label: "Footwear", value: "shoes" },
-];
-
-const seasons = [
-  { label: "Summer", value: "summer" },
-  { label: "Winter", value: "winter" },
-  { label: "Rainy", value: "monsoon" },
-  { label: "All Seasons", value: "all_season" },
-];
-
-const occasions = [
-  "Casual",
-  "College",
-  "Office",
-  "Party",
-  "Festival",
-  "Wedding",
-  "Travel",
-];
-
+// Clothing item type
 type ClothingItem = {
   id: string;
   name: string;
   category: string;
   color: string | null;
   season: string | null;
-  occasion: string[] | string | null;
-  image_path: string | null;
+  occasion: string[];
+  image_path?: string | null;
   confirmed_attributes?: Record<string, string>;
 };
 
-type WardrobeResponse = {
-  data: ClothingItem[] | null;
+// API response type
+type ApiResponse<T> = {
+  data: T | null;
   error: string | null;
 };
 
-type UpdateResponse = {
-  data: ClothingItem | null;
-  error: string | null;
-};
+// Supported clothing categories
+const categories = [
+  { value: "tshirt", label: "T-Shirts" },
+  { value: "shirt", label: "Shirts" },
+  { value: "trousers", label: "Trousers" },
+  { value: "jeans", label: "Jeans" },
+  { value: "skirt", label: "Skirts" },
+  { value: "dress", label: "Dresses" },
+  { value: "jacket", label: "Jackets" },
+  { value: "shoes", label: "Footwear" },
+];
 
-// Convert old category labels into supported values
+// Supported seasons
+const seasons = [
+  { value: "summer", label: "Summer" },
+  { value: "winter", label: "Winter" },
+  { value: "monsoon", label: "Rainy" },
+  { value: "all_season", label: "All Seasons" },
+];
+
+// Occasion options
+const occasions = [
+  "Casual",
+  "College",
+  "Office",
+  "Formal",
+  "Party",
+  "Festival",
+  "Wedding",
+  "Travel",
+  "Sports",
+  "Beach",
+];
+
+// Normalize older category values
 function normalizeCategory(value: string) {
   const category = value.trim().toLowerCase();
 
   const aliases: Record<string, string> = {
-    "t-shirt": "tshirt",
-    "t-shirts": "tshirt",
-    "t shirt": "tshirt",
-    "t shirts": "tshirt",
-    tshirts: "tshirt",
-    tee: "tshirt",
+    tops: "shirt",
     shirts: "shirt",
+    "t-shirts": "tshirt",
+    "t-shirt": "tshirt",
+    tshirts: "tshirt",
+    "t shirt": "tshirt",
+    tee: "tshirt",
     pants: "trousers",
     pant: "trousers",
     trouser: "trousers",
+    bottoms: "trousers",
     denims: "jeans",
     denim: "jeans",
     skirts: "skirt",
@@ -94,42 +101,31 @@ function normalizeCategory(value: string) {
     footwear: "shoes",
     sneakers: "shoes",
     sneaker: "shoes",
-    shoe: "shoes",
   };
 
-  const normalized =
-    aliases[category] || category;
-
-  return categories.some(
-    (item) => item.value === normalized
-  )
-    ? normalized
-    : "";
+  return aliases[category] || category;
 }
 
-// Convert old season labels into supported values
+// Normalize older season values
 function normalizeSeason(value: string | null) {
-  const season =
-    (value || "").trim().toLowerCase();
+  if (!value) return "";
+
+  const season = value.trim().toLowerCase();
 
   const aliases: Record<string, string> = {
     "all seasons": "all_season",
     "all season": "all_season",
     "all-season": "all_season",
+    all_seasons: "all_season",
     rainy: "monsoon",
+    rain: "monsoon",
   };
 
-  const normalized =
-    aliases[season] || season;
-
-  return seasons.some(
-    (item) => item.value === normalized
-  )
-    ? normalized
-    : "";
+  return aliases[season] || season;
 }
 
-export default function EditClothingPage() {
+// Main Edit Clothing component
+function EditClothingContent() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
 
@@ -138,7 +134,7 @@ export default function EditClothingPage() {
   const [name, setName] = useState("");
   const [category, setCategory] = useState("");
   const [color, setColor] = useState("");
-  const [season, setSeason] = useState("");
+  const [season, setSeason] = useState("all_season");
   const [occasion, setOccasion] = useState("");
 
   const [existingOccasions, setExistingOccasions] =
@@ -147,41 +143,37 @@ export default function EditClothingPage() {
   const [originalOccasion, setOriginalOccasion] =
     useState("");
 
-  const [confirmed, setConfirmed] =
-    useState(false);
+  const [confirmed, setConfirmed] = useState(false);
 
-  const [loading, setLoading] =
-    useState(true);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  const [saving, setSaving] =
-    useState(false);
+  const [itemFound, setItemFound] = useState(false);
 
-  const [error, setError] =
-    useState("");
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
-  const [success, setSuccess] =
-    useState("");
-
-  const [itemFound, setItemFound] =
-    useState(false);
-
-  // Load existing clothing item
+  // Load existing clothing details
   useEffect(() => {
-    let cancelled = false;
+    let active = true;
 
     async function loadClothingItem() {
       setLoading(true);
       setError("");
+      setSuccess("");
       setItemFound(false);
+      setConfirmed(false);
 
       try {
         const response =
-          await apiRequest<WardrobeResponse>(
+          await apiRequest<ApiResponse<ClothingItem[]>>(
             "/wardrobe",
             {
               method: "GET",
             }
           );
+
+        if (!active) return;
 
         if (response.error) {
           throw new Error(response.error);
@@ -189,7 +181,7 @@ export default function EditClothingPage() {
 
         if (!Array.isArray(response.data)) {
           throw new Error(
-            "Could not load your wardrobe."
+            "Unable to load wardrobe items."
           );
         }
 
@@ -203,12 +195,10 @@ export default function EditClothingPage() {
           );
         }
 
-        if (cancelled) return;
-
         setName(item.name || "");
 
         setCategory(
-          normalizeCategory(item.category)
+          normalizeCategory(item.category || "")
         );
 
         setColor(item.color || "");
@@ -217,12 +207,9 @@ export default function EditClothingPage() {
           normalizeSeason(item.season)
         );
 
-        const savedOccasions = Array.isArray(
-          item.occasion
-        )
-          ? item.occasion
-          : typeof item.occasion === "string"
-            ? [item.occasion]
+        const savedOccasions =
+          Array.isArray(item.occasion)
+            ? item.occasion
             : [];
 
         const firstOccasion =
@@ -232,20 +219,19 @@ export default function EditClothingPage() {
         setOriginalOccasion(firstOccasion);
         setOccasion(firstOccasion);
 
-        setConfirmed(false);
         setItemFound(true);
 
-      } catch (error) {
-        if (cancelled) return;
+      } catch (err) {
+        if (!active) return;
 
         setError(
-          error instanceof Error
-            ? error.message
-            : "Unable to load the clothing item."
+          err instanceof Error
+            ? err.message
+            : "Failed to load clothing details."
         );
 
       } finally {
-        if (!cancelled) {
+        if (active) {
           setLoading(false);
         }
       }
@@ -259,12 +245,12 @@ export default function EditClothingPage() {
     }
 
     return () => {
-      cancelled = true;
+      active = false;
     };
 
   }, [id]);
 
-  // Update existing clothing item
+  // Save updated clothing details
   async function handleSubmit(
     event: FormEvent<HTMLFormElement>
   ) {
@@ -275,16 +261,43 @@ export default function EditClothingPage() {
     setError("");
     setSuccess("");
 
-    if (!name.trim() || !category || !color.trim()) {
+    const cleanName = name.trim();
+    const cleanColor = color.trim().toLowerCase();
+
+    if (!cleanName) {
+      setError("Please enter a clothing name.");
+      return;
+    }
+
+    if (
+      !categories.some(
+        (item) => item.value === category
+      )
+    ) {
       setError(
-        "Please enter the clothing name, category and color."
+        "Please select a valid clothing category."
       );
+      return;
+    }
+
+    if (!cleanColor) {
+      setError("Please enter the clothing color.");
+      return;
+    }
+
+    if (
+      season &&
+      !seasons.some(
+        (item) => item.value === season
+      )
+    ) {
+      setError("Please select a valid season.");
       return;
     }
 
     if (!confirmed) {
       setError(
-        "Please confirm that the category and color are correct."
+        "Please confirm the clothing category and color before saving."
       );
       return;
     }
@@ -292,56 +305,54 @@ export default function EditClothingPage() {
     setSaving(true);
 
     try {
-      const clothingData = {
-        name: name.trim(),
+      // Preserve existing occasions when unchanged
+      const updatedOccasions =
+        occasion === originalOccasion
+          ? existingOccasions
+          : occasion
+            ? [occasion.toLowerCase()]
+            : [];
 
-        category: category,
-
-        color: color.trim().toLowerCase(),
-
+      const payload = {
+        name: cleanName,
+        category,
+        color: cleanColor,
         season: season || null,
+        occasion: updatedOccasions,
 
-        occasion:
-          occasion === originalOccasion
-            ? existingOccasions
-            : occasion
-              ? [occasion.toLowerCase()]
-              : [],
-
-        // Confirmed attributes used by Styra
         confirmed_attributes: {
-          category: category,
-          color: color.trim().toLowerCase(),
+          category,
+          color: cleanColor,
         },
       };
 
       const response =
-        await apiRequest<UpdateResponse>(
-          `/wardrobe/${id}`,
+        await apiRequest<ApiResponse<ClothingItem>>(
+          `/wardrobe/${encodeURIComponent(id)}`,
           {
             method: "PATCH",
-            body: JSON.stringify(clothingData),
+            body: JSON.stringify(payload),
           }
         );
 
       if (response.error || !response.data) {
         throw new Error(
           response.error ||
-            "Could not update the clothing item."
+            "Unable to update clothing item."
         );
       }
 
       setSuccess(
-        "Clothing details updated successfully!"
+        "Clothing item updated successfully!"
       );
 
       router.push("/user/wardrobe");
 
-    } catch (error) {
+    } catch (err) {
       setError(
-        error instanceof Error
-          ? error.message
-          : "Something went wrong. Please try again."
+        err instanceof Error
+          ? err.message
+          : "Failed to update clothing item."
       );
 
     } finally {
@@ -349,10 +360,81 @@ export default function EditClothingPage() {
     }
   }
 
+  // Loading screen
+  if (loading) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-gray-50 p-4">
+
+        <div className="flex items-center gap-3 text-[#172A4B]">
+
+          <Loader2
+            size={26}
+            className="animate-spin text-[#8170C4]"
+          />
+
+          <p>Loading clothing details...</p>
+
+        </div>
+
+      </main>
+    );
+  }
+
+  // Clothing item not found or API error
+  if (!itemFound) {
+    return (
+      <main className="min-h-screen bg-gray-50 p-4 text-[#172A4B] sm:p-6">
+
+        <div className="mx-auto max-w-2xl">
+
+          <Link
+            href="/user/wardrobe"
+            className="mb-6 inline-flex items-center gap-2 text-sm font-medium hover:underline"
+          >
+            <ArrowLeft size={18} />
+            Back to Wardrobe
+          </Link>
+
+          <Card shadow="small">
+
+            <div className="py-8 text-center">
+
+              <AlertCircle
+                size={40}
+                className="mx-auto text-red-500"
+              />
+
+              <h1 className="mt-4 text-xl font-semibold">
+                Unable to Load Clothing
+              </h1>
+
+              <p className="mt-3 text-sm text-gray-600">
+                {error ||
+                  "Clothing item not found."}
+              </p>
+
+              <Link
+                href="/user/wardrobe"
+                className="mt-5 inline-block rounded-lg bg-[#17233F] px-5 py-3 text-sm font-medium text-white hover:bg-[#26385F]"
+              >
+                Return to Wardrobe
+              </Link>
+
+            </div>
+
+          </Card>
+
+        </div>
+
+      </main>
+    );
+  }
+
+  // Edit Clothing form
   return (
     <main className="min-h-screen bg-gray-50 p-4 text-[#172A4B] sm:p-6">
 
-      <div className="mx-auto max-w-3xl">
+      <div className="mx-auto max-w-2xl">
 
         {/* Back link */}
         <Link
@@ -363,350 +445,314 @@ export default function EditClothingPage() {
           Back to Wardrobe
         </Link>
 
-        {/* Heading */}
-        <h1 className="text-3xl font-bold text-[#172A4B]">
+        {/* Page heading */}
+        <h1 className="text-2xl font-bold sm:text-3xl">
           Edit Clothing Item
         </h1>
 
-        <p className="mt-2 text-gray-600">
+        <p className="mt-2 text-sm text-gray-600 sm:text-base">
           Update and confirm your clothing details.
         </p>
 
-        {/* Loading state */}
-        {loading ? (
+        {/* Edit form */}
+        <div className="mt-6">
 
-          <div className="mt-8">
+          <Card shadow="small">
 
-            <Card>
+            <form
+              onSubmit={handleSubmit}
+              className="space-y-5"
+            >
 
-              <div
-                role="status"
-                className="flex flex-col items-center justify-center py-12"
-              >
+              {/* Clothing name */}
+              <Input
+                label="Clothing Name"
+                type="text"
+                value={name}
+                onChange={(event) =>
+                  setName(event.target.value)
+                }
+                placeholder="Example: White Shirt"
+                maxLength={120}
+                required
+              />
 
-                <Loader2
-                  size={36}
-                  className="animate-spin text-[#8170C4]"
-                />
+              {/* Category */}
+              <div>
 
-                <p className="mt-4 text-sm text-gray-600">
-                  Loading clothing details...
-                </p>
+                <label
+                  htmlFor="category"
+                  className="mb-2 block text-sm font-medium"
+                >
+                  Category
+                </label>
+
+                <select
+                  id="category"
+                  value={category}
+                  onChange={(event) => {
+                    setCategory(event.target.value);
+                    setConfirmed(false);
+                  }}
+                  required
+                  className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-[#8170C4] focus:ring-2 focus:ring-[#C9B9E8]"
+                >
+
+                  <option value="">
+                    Select category
+                  </option>
+
+                  {categories.map((item) => (
+                    <option
+                      key={item.value}
+                      value={item.value}
+                    >
+                      {item.label}
+                    </option>
+                  ))}
+
+                </select>
 
               </div>
 
-            </Card>
+              {/* Color */}
+              <Input
+                label="Color"
+                type="text"
+                value={color}
+                onChange={(event) => {
+                  setColor(event.target.value);
+                  setConfirmed(false);
+                }}
+                placeholder="Example: White"
+                required
+              />
 
-          </div>
+              {/* Season */}
+              <div>
 
-        ) : !itemFound ? (
+                <label
+                  htmlFor="season"
+                  className="mb-2 block text-sm font-medium"
+                >
+                  Season
+                </label>
 
-          /* Item loading error */
-          <div className="mt-8">
+                <select
+                  id="season"
+                  value={season}
+                  onChange={(event) =>
+                    setSeason(event.target.value)
+                  }
+                  className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-[#8170C4] focus:ring-2 focus:ring-[#C9B9E8]"
+                >
 
-            <Card>
+                  <option value="">
+                    Select season
+                  </option>
 
-              <div className="py-8 text-center">
+                  {seasons.map((item) => (
+                    <option
+                      key={item.value}
+                      value={item.value}
+                    >
+                      {item.label}
+                    </option>
+                  ))}
 
-                <AlertCircle
-                  size={40}
-                  className="mx-auto text-red-500"
-                />
+                </select>
 
-                <h2 className="mt-4 text-xl font-semibold">
-                  Unable to load clothing item
-                </h2>
+              </div>
 
-                <p className="mt-2 text-sm text-gray-600">
-                  {error}
-                </p>
+              {/* Occasion */}
+              <div>
+
+                <label
+                  htmlFor="occasion"
+                  className="mb-2 block text-sm font-medium"
+                >
+                  Occasion (Optional)
+                </label>
+
+                <select
+                  id="occasion"
+                  value={occasion}
+                  onChange={(event) =>
+                    setOccasion(event.target.value)
+                  }
+                  className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-[#8170C4] focus:ring-2 focus:ring-[#C9B9E8]"
+                >
+
+                  <option value="">
+                    Select occasion
+                  </option>
+
+                  {occasions.map((item) => (
+                    <option
+                      key={item}
+                      value={item.toLowerCase()}
+                    >
+                      {item}
+                    </option>
+                  ))}
+
+                  {occasion &&
+                    !occasions.some(
+                      (item) =>
+                        item.toLowerCase() === occasion
+                    ) && (
+                      <option value={occasion}>
+                        {occasion}
+                      </option>
+                    )}
+
+                </select>
+
+              </div>
+
+              {/* Confirm clothing details */}
+              <div className="rounded-xl border border-[#DDD4F0] bg-[#F3F0FA] p-4">
+
+                <label className="flex cursor-pointer items-start gap-3">
+
+                  <input
+                    type="checkbox"
+                    checked={confirmed}
+                    onChange={(event) =>
+                      setConfirmed(
+                        event.target.checked
+                      )
+                    }
+                    className="mt-1 h-4 w-4 shrink-0 accent-[#17233F]"
+                  />
+
+                  <div>
+
+                    <p className="text-sm font-semibold">
+                      Confirm Clothing Details
+                    </p>
+
+                    <p className="mt-1 text-xs leading-5 text-gray-600">
+                      I confirm that the selected
+                      category and color are correct.
+                      Styra can use these confirmed
+                      details for personalized outfit
+                      suggestions.
+                    </p>
+
+                  </div>
+
+                </label>
+
+              </div>
+
+              {/* Error message */}
+              {error && (
+                <div
+                  role="alert"
+                  className="flex items-start gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-700"
+                >
+
+                  <AlertCircle
+                    size={18}
+                    className="mt-0.5 shrink-0"
+                  />
+
+                  <p>{error}</p>
+
+                </div>
+              )}
+
+              {/* Success message */}
+              {success && (
+                <div
+                  role="status"
+                  className="flex items-start gap-2 rounded-lg bg-green-50 p-3 text-sm text-green-700"
+                >
+
+                  <CheckCircle2
+                    size={18}
+                    className="shrink-0"
+                  />
+
+                  <p>{success}</p>
+
+                </div>
+              )}
+
+              {/* Action buttons */}
+              <div className="flex flex-wrap items-center gap-3 pt-2">
+
+                <Button
+                  type="submit"
+                  size="medium"
+                  disabled={saving}
+                >
+
+                  <span className="inline-flex items-center justify-center gap-2">
+
+                    {saving ? (
+                      <Loader2
+                        size={18}
+                        className="animate-spin"
+                      />
+                    ) : (
+                      <Save size={18} />
+                    )}
+
+                    {saving
+                      ? "Saving..."
+                      : "Save Changes"}
+
+                  </span>
+
+                </Button>
 
                 <Link
                   href="/user/wardrobe"
-                  className="mt-5 inline-block rounded-lg bg-[#172A4B] px-5 py-3 text-sm text-white"
+                  className="inline-flex items-center justify-center rounded-lg border border-[#17233F] px-5 py-2.5 text-sm font-medium text-[#17233F] hover:bg-[#F3F0FA]"
                 >
-                  Return to Wardrobe
+                  Cancel
                 </Link>
 
               </div>
 
-            </Card>
+            </form>
 
-          </div>
+          </Card>
 
-        ) : (
-
-          /* Edit form */
-          <div className="mt-8">
-
-            <Card>
-
-              <form
-                onSubmit={handleSubmit}
-                className="space-y-6"
-              >
-
-                {/* Clothing name */}
-                <Input
-                  label="Clothing Name"
-                  value={name}
-                  onChange={(event) =>
-                    setName(event.target.value)
-                  }
-                  maxLength={120}
-                  required
-                  disabled={saving}
-                />
-
-                {/* Category */}
-                <div>
-
-                  <label
-                    htmlFor="category"
-                    className="mb-2 block text-sm font-semibold"
-                  >
-                    Category
-                  </label>
-
-                  <select
-                    id="category"
-                    value={category}
-                    onChange={(event) => {
-                      setCategory(event.target.value);
-                      setConfirmed(false);
-                    }}
-                    required
-                    disabled={saving}
-                    className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-[#8170C4]"
-                  >
-
-                    <option value="">
-                      Select category
-                    </option>
-
-                    {categories.map((item) => (
-                      <option
-                        key={item.value}
-                        value={item.value}
-                      >
-                        {item.label}
-                      </option>
-                    ))}
-
-                  </select>
-
-                </div>
-
-                {/* Color */}
-                <Input
-                  label="Color"
-                  value={color}
-                  onChange={(event) => {
-                    setColor(event.target.value);
-                    setConfirmed(false);
-                  }}
-                  required
-                  disabled={saving}
-                />
-
-                {/* Season */}
-                <div>
-
-                  <label
-                    htmlFor="season"
-                    className="mb-2 block text-sm font-semibold"
-                  >
-                    Season
-                  </label>
-
-                  <select
-                    id="season"
-                    value={season}
-                    onChange={(event) =>
-                      setSeason(event.target.value)
-                    }
-                    disabled={saving}
-                    className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-[#8170C4]"
-                  >
-
-                    <option value="">
-                      Select season
-                    </option>
-
-                    {seasons.map((item) => (
-                      <option
-                        key={item.value}
-                        value={item.value}
-                      >
-                        {item.label}
-                      </option>
-                    ))}
-
-                  </select>
-
-                </div>
-
-                {/* Occasion */}
-                <div>
-
-                  <label
-                    htmlFor="occasion"
-                    className="mb-2 block text-sm font-semibold"
-                  >
-                    Occasion (Optional)
-                  </label>
-
-                  <select
-                    id="occasion"
-                    value={occasion}
-                    onChange={(event) =>
-                      setOccasion(event.target.value)
-                    }
-                    disabled={saving}
-                    className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-[#8170C4]"
-                  >
-
-                    <option value="">
-                      Select occasion
-                    </option>
-
-                    {occasion &&
-                      !occasions.some(
-                        (item) =>
-                          item.toLowerCase() === occasion
-                      ) && (
-                        <option value={occasion}>
-                          {occasion}
-                        </option>
-                      )}
-
-                    {occasions.map((item) => (
-                      <option
-                        key={item}
-                        value={item.toLowerCase()}
-                      >
-                        {item}
-                      </option>
-                    ))}
-
-                  </select>
-
-                </div>
-
-                {/* User confirmation */}
-                <div className="rounded-xl border border-[#DCD3EF] bg-[#F3F0FA] p-4">
-
-                  <label className="flex cursor-pointer items-start gap-3">
-
-                    <input
-                      type="checkbox"
-                      checked={confirmed}
-                      onChange={(event) =>
-                        setConfirmed(event.target.checked)
-                      }
-                      disabled={saving}
-                      className="mt-1 h-4 w-4 accent-[#172A4B]"
-                    />
-
-                    <div>
-
-                      <p className="text-sm font-semibold">
-                        Confirm Clothing Details
-                      </p>
-
-                      <p className="mt-1 text-sm text-gray-600">
-                        I confirm that the category and
-                        color are correct. Styra can use
-                        these confirmed details for
-                        personalized outfit suggestions.
-                      </p>
-
-                    </div>
-
-                  </label>
-
-                </div>
-
-                {/* Error message */}
-                {error && (
-
-                  <div
-                    role="alert"
-                    className="flex items-start gap-2 rounded-lg bg-red-50 p-4 text-sm text-red-700"
-                  >
-
-                    <AlertCircle
-                      size={18}
-                      className="shrink-0"
-                    />
-
-                    {error}
-
-                  </div>
-
-                )}
-
-                {/* Success message */}
-                {success && (
-
-                  <div
-                    role="status"
-                    className="flex items-center gap-2 rounded-lg bg-green-50 p-4 text-sm text-green-700"
-                  >
-
-                    <CheckCircle2 size={18} />
-
-                    {success}
-
-                  </div>
-
-                )}
-
-                {/* Buttons */}
-                <div className="flex flex-wrap gap-3">
-
-                  <Button
-                    type="submit"
-                    size="medium"
-                    disabled={saving}
-                  >
-
-                    <span className="inline-flex items-center gap-2">
-
-                      {saving && (
-                        <Loader2
-                          size={18}
-                          className="animate-spin"
-                        />
-                      )}
-
-                      {saving
-                        ? "Saving..."
-                        : "Save Changes"}
-
-                    </span>
-
-                  </Button>
-
-                  <Link
-                    href="/user/wardrobe"
-                    className="inline-flex items-center justify-center rounded-lg border border-[#172A4B] px-5 py-2.5 text-sm font-medium hover:bg-[#F3F0FA]"
-                  >
-                    Cancel
-                  </Link>
-
-                </div>
-
-              </form>
-
-            </Card>
-
-          </div>
-
-        )}
+        </div>
 
       </div>
 
     </main>
+  );
+}
+
+// IMPORTANT: Suspense wrapper fixes the useParams issue
+export default function EditClothingPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex min-h-screen items-center justify-center bg-gray-50 p-4">
+
+          <div className="flex items-center gap-3 text-[#172A4B]">
+
+            <Loader2
+              size={26}
+              className="animate-spin text-[#8170C4]"
+            />
+
+            <p>Loading clothing details...</p>
+
+          </div>
+
+        </main>
+      }
+    >
+
+      <EditClothingContent />
+
+    </Suspense>
   );
 }

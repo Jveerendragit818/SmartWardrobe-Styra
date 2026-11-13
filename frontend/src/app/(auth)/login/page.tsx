@@ -29,6 +29,8 @@ export default function LoginPage() {
   ) {
     event.preventDefault();
 
+    if (loading) return;
+
     const newErrors: typeof errors = {};
 
     if (!email.trim()) {
@@ -36,7 +38,8 @@ export default function LoginPage() {
     } else if (
       !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
     ) {
-      newErrors.email = "Enter a valid email address";
+      newErrors.email =
+        "Enter a valid email address";
     }
 
     if (!password) {
@@ -67,14 +70,15 @@ export default function LoginPage() {
       }
 
       if (!data.session) {
-        setMessage("Unable to create a login session.");
+        setMessage(
+          "Unable to create a login session."
+        );
         return;
       }
 
       setMessage("Login successful!");
 
       router.replace("/user/dashboard");
-
     } catch (error) {
       setMessage(
         error instanceof Error
@@ -87,13 +91,16 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#F3F4F6] px-4 py-12">
-      <div className="w-full max-w-md">
+    <main className="flex min-h-screen w-full min-w-0 items-center justify-center bg-[#F3F4F6] px-4 py-8 sm:py-12">
 
-        <div className="mb-8 text-center">
+      <div className="mx-auto w-full min-w-0 max-w-md">
+
+        {/* SmartWardrobe branding */}
+        <div className="mb-6 text-center sm:mb-8">
+
           <Link
             href="/"
-            className="text-3xl font-bold tracking-tight text-[#17233F]"
+            className="inline-block max-w-full break-words text-2xl font-bold tracking-tight text-[#17233F] sm:text-3xl"
           >
             SmartWardrobe
           </Link>
@@ -101,110 +108,137 @@ export default function LoginPage() {
           <p className="mt-3 text-sm text-gray-600">
             Your AI-Powered Fashion Companion
           </p>
+
         </div>
 
-        <Card padding="large" shadow="medium">
+        {/* Login card */}
+        <Card
+          padding="small"
+          shadow="medium"
+          className="w-full min-w-0 max-w-full"
+        >
 
-          <h1 className="text-center text-2xl font-bold text-[#17233F]">
-            Welcome Back
-          </h1>
+          <div className="min-w-0 px-2 py-4 sm:p-4">
 
-          <p className="mt-2 text-center text-sm text-gray-600">
-            Sign in to manage your wardrobe.
-          </p>
+            <h1 className="text-center text-xl font-bold text-[#17233F] sm:text-2xl">
+              Welcome Back
+            </h1>
 
-          <form
-            onSubmit={handleSubmit}
-            noValidate
-            className="mt-8 space-y-5"
-          >
+            <p className="mt-2 text-center text-sm text-gray-600">
+              Sign in to manage your wardrobe.
+            </p>
 
-            <Input
-              id="email"
-              name="email"
-              label="Email Address"
-              type="email"
-              placeholder="Enter your email"
-              autoComplete="email"
-              value={email}
-              onChange={(event) => {
-                setEmail(event.target.value);
-                setErrors((previous) => ({
-                  ...previous,
-                  email: undefined,
-                }));
-              }}
-              error={errors.email}
-              required
-            />
+            {/* Login form */}
+            <form
+              onSubmit={handleSubmit}
+              noValidate
+              className="mt-6 w-full min-w-0 space-y-5 sm:mt-8"
+            >
 
-            <Input
-              id="password"
-              name="password"
-              label="Password"
-              type="password"
-              placeholder="Enter your password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(event) => {
-                setPassword(event.target.value);
-                setErrors((previous) => ({
-                  ...previous,
-                  password: undefined,
-                }));
-              }}
-              error={errors.password}
-              required
-            />
+              {/* Email */}
+              <Input
+                id="email"
+                name="email"
+                label="Email Address"
+                type="email"
+                placeholder="Enter your email"
+                autoComplete="email"
+                value={email}
+                className="min-w-0 max-w-full"
+                onChange={(event) => {
+                  setEmail(event.target.value);
 
-            <div className="text-right">
+                  setErrors((previous) => ({
+                    ...previous,
+                    email: undefined,
+                  }));
+                }}
+                error={errors.email}
+                required
+              />
+
+              {/* Password */}
+              <Input
+                id="password"
+                name="password"
+                label="Password"
+                type="password"
+                placeholder="Enter your password"
+                autoComplete="current-password"
+                value={password}
+                className="min-w-0 max-w-full"
+                onChange={(event) => {
+                  setPassword(event.target.value);
+
+                  setErrors((previous) => ({
+                    ...previous,
+                    password: undefined,
+                  }));
+                }}
+                error={errors.password}
+                required
+              />
+
+              {/* Forgot password */}
+              <div className="text-right">
+
+                <Link
+                  href="/forgot-password"
+                  className="text-sm font-medium text-[#17233F] hover:underline"
+                >
+                  Forgot Password?
+                </Link>
+
+              </div>
+
+              {/* Login status */}
+              {message && (
+                <p
+                  role="status"
+                  className="break-words rounded-lg bg-[#F3F0FA] p-3 text-sm text-[#17233F]"
+                >
+                  {message}
+                </p>
+              )}
+
+              {/* Sign in button */}
+              <Button
+                type="submit"
+                variant="primary"
+                size="large"
+                className="w-full min-w-0 max-w-full"
+                disabled={loading}
+              >
+                {loading
+                  ? "Signing in..."
+                  : "Sign In"}
+              </Button>
+
+            </form>
+
+            {/* Registration link */}
+            <p className="mt-6 text-center text-sm leading-relaxed text-gray-600">
+              Don&apos;t have an account?{" "}
+
               <Link
-                href="/forgot-password"
-                className="text-sm font-medium text-[#17233F] hover:underline"
+                href="/register"
+                className="font-semibold text-[#17233F] hover:underline"
               >
-                Forgot Password?
+                Sign Up
               </Link>
-            </div>
+            </p>
 
-            {message && (
-              <p
-                role="status"
-                className="rounded-lg bg-[#F3F0FA] p-3 text-sm text-[#17233F]"
-              >
-                {message}
-              </p>
-            )}
-
-            <Button
-              type="submit"
-              variant="primary"
-              size="large"
-              className="w-full"
-              disabled={loading}
-            >
-              {loading ? "Signing in..." : "Sign In"}
-            </Button>
-
-          </form>
-
-          <p className="mt-6 text-center text-sm text-gray-600">
-            Don&apos;t have an account?{" "}
-            <Link
-              href="/register"
-              className="font-semibold text-[#17233F] hover:underline"
-            >
-              Sign Up
-            </Link>
-          </p>
+          </div>
 
         </Card>
 
+        {/* Footer */}
         <p className="mt-6 text-center text-sm text-gray-500">
-          © SmartWardrobe
+          &copy; SmartWardrobe
         </p>
 
       </div>
+
     </main>
   );
 }
-
