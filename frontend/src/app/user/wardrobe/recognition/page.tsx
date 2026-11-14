@@ -1,14 +1,19 @@
 
 "use client";
 
-import { useState } from "react";
+import {
+  useEffect,
+  useState,
+  type ChangeEvent,
+} from "react";
 import Link from "next/link";
 
 import {
   ArrowLeft,
-  Shirt,
+  ImagePlus,
   Sparkles,
   Loader2,
+  CheckCircle2,
   AlertCircle,
 } from "lucide-react";
 
@@ -16,95 +21,179 @@ import Button from "@/components/shared/Button";
 import Card from "@/components/shared/Card";
 import { apiRequest } from "@/lib/api";
 
-// Clothing item returned by backend
-type ClothingItem = {
-  id: string;
-  name: string | null;
-  category: string | null;
-  color: string | null;
-  season: string | null;
-  occasion: string[] | string;
-  image_path: string | null;
-};
+const categories = [
+  { label: "T-Shirts", value: "tshirt" },
+  { label: "Shirts", value: "shirt" },
+  { label: "Trousers", value: "trousers" },
+  { label: "Jeans", value: "jeans" },
+  { label: "Skirts", value: "skirt" },
+  { label: "Dresses", value: "dress" },
+  { label: "Jackets", value: "jacket" },
+  { label: "Footwear", value: "shoes" },
+];
 
-// Recommended outfit
-type RecommendedOutfit = {
-  item_ids: string[];
-  items: ClothingItem[];
-  reason?: string;
-  reasons?: string[];
+const seasons = [
+  { label: "Summer", value: "summer" },
+  { label: "Winter", value: "winter" },
+  { label: "Rainy", value: "monsoon" },
+  { label: "All Seasons", value: "all_season" },
+];
+
+const occasions = [
+  "Casual",
+  "College",
+  "Office",
+  "Party",
+  "Festival",
+  "Wedding",
+  "Travel",
+  "Sports",
+];
+
+type Candidate = {
+  label?: string;
+  value?: string;
   score?: number;
 };
 
-// API response
-type RecommendationResponse = {
+type PredictedAttribute = {
+  value?: string | null;
+  status?: string;
+  confidence?: number | null;
+  candidates?: Candidate[];
+};
+
+type RecognitionResponse = {
   data: {
-    outfits: RecommendedOutfit[];
-    message: string | null;
+    model?: string;
+    predicted_attributes?: {
+      category?: PredictedAttribute;
+      color?: PredictedAttribute;
+      pattern?: PredictedAttribute;
+      season?: PredictedAttribute;
+      occasion?: PredictedAttribute;
+    };
   } | null;
   error: string | null;
 };
 
-// Occasion options
-const occasions = [
-  { label: "College", value: "college" },
-  { label: "Casual", value: "casual" },
-  { label: "Office", value: "office" },
-  { label: "Party", value: "party" },
-  { label: "Festival", value: "festival" },
-  { label: "Wedding", value: "wedding" },
-];
+type ClothingDetails = {
+  category: string;
+  color: string;
+  pattern: string;
+  season: string;
+  occasion: string;
+};
 
-export default function RecommendationPage() {
+const initialDetails: ClothingDetails = {
+  category: "",
+  color: "",
+  pattern: "",
+  season: "all_season",
+  occasion: "",
+};
 
-  const [occasion, setOccasion] =
-    useState("college");
+const fieldClass =
+  "w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-[#8170C4] focus:ring-2 focus:ring-[#E9E2F5]";
 
-  const [limit, setLimit] =
-    useState(5);
+export default function RecognitionPage() {
+  const [file, setFile] = useState<File | null>(null);
 
-  const [outfits, setOutfits] =
-    useState<RecommendedOutfit[]>([]);
+  const [preview, setPreview] = useState<string | null>(
+    null
+  );
 
-  const [loading, setLoading] =
-    useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
 
-  const [error, setError] =
-    useState("");
+  const [prediction, setPrediction] =
+    useState<RecognitionResponse["data"]>(null);
 
-  const [message, setMessage] =
-    useState("");
+  const [details, setDetails] =
+    useState<ClothingDetails>(initialDetails);
 
-  const [generated, setGenerated] =
-    useState(false);
+  const [confirmed, setConfirmed] = useState(false);
 
-  const [generatedOccasion, setGeneratedOccasion] =
-    useState("");
+  const [error, setError] = useState("");
 
-  // Connect to recommendation API
-  async function generateRecommendations() {
+  const [suggestion, setSuggestion] = useState("");
 
-    if (loading) return;
+  const [confidence, setConfidence] =
+    useState<number | null>(null);
 
-    setLoading(true);
+  useEffect(() => {
+    return () => {
+      if (preview) {
+        URL.revokeObjectURL(preview);
+      }
+    };
+  }, [preview]);
+
+  function handleImage(
+    event: ChangeEvent<HTMLInputElement>
+  ) {
+    const selectedFile = event.target.files?.[0];
+
+    if (!selectedFile) return;
+
+    event.target.value = "";
+
+    if (
+      ![
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+      ].includes(selectedFile.type)
+    ) {
+      setError(
+        "Please upload a JPEG, PNG, or WEBP image."
+      );
+      return;
+    }
+
+    if (selectedFile.size === 0) {
+      setError("The selected image is empty.");
+      return;
+    }
+
+    if (selectedFile.size > 5 * 1024 * 1024) {
+      setError("Image must be 5 MB or smaller.");
+      return;
+    }
+
+    setFile(selectedFile);
+
+    setPreview(URL.createObjectURL(selectedFile));
+
+    setPrediction(null);
+    setDetails({ ...initialDetails });
+    setConfirmed(false);
+    setSuggestion("");
+    setConfidence(null);
     setError("");
-    setMessage("");
-    setOutfits([]);
-    setGenerated(false);
+  }
+
+  async function handleAnalyze() {
+    if (!file || analyzing) return;
+
+    setAnalyzing(true);
+    setError("");
+    setPrediction(null);
+    setConfirmed(false);
+    setSuggestion("");
+    setConfidence(null);
+    setDetails({ ...initialDetails });
 
     try {
+      const formData = new FormData();
+
+      formData.append("file", file);
 
       const response =
-        await apiRequest<RecommendationResponse>(
-          "/recommendations",
+        await apiRequest<RecognitionResponse>(
+          "/recognition/predict",
           {
             method: "POST",
-            body: JSON.stringify({
-              occasion: occasion,
-              limit: limit,
-              weather: null,
-              recent_outfits: null,
-            }),
+            body: formData,
           }
         );
 
@@ -112,545 +201,569 @@ export default function RecommendationPage() {
         throw new Error(response.error);
       }
 
-      if (
-        !response.data ||
-        !Array.isArray(response.data.outfits)
-      ) {
+      if (!response.data) {
         throw new Error(
-          "Invalid recommendation response."
+          "No recognition result was returned."
         );
       }
 
-      setOutfits(response.data.outfits);
+      const result = response.data;
 
-      setMessage(
-        response.data.message || ""
+      const categoryPrediction =
+        result.predicted_attributes?.category;
+
+      const topCandidate =
+        categoryPrediction?.candidates?.[0];
+
+      let predictedCategory = "";
+
+      const normalizedCategory =
+        categoryPrediction?.value
+          ?.trim()
+          .toLowerCase() || "";
+
+      // Accept supported normalized categories.
+      if (
+        categories.some(
+          (item) =>
+            item.value === normalizedCategory
+        )
+      ) {
+        predictedCategory = normalizedCategory;
+      }
+
+      // Verified model mapping:
+      // LABEL_6 represents Jeans.
+      // This is only a suggestion, not confirmation.
+      else if (
+        result.model ===
+          "wargoninnovation/wargon-clothing-classifier" &&
+        topCandidate?.label === "LABEL_6"
+      ) {
+        predictedCategory = "jeans";
+      }
+
+      const categoryLabel =
+        categories.find(
+          (item) =>
+            item.value === predictedCategory
+        )?.label || "";
+
+      setSuggestion(categoryLabel);
+
+      const score =
+        categoryPrediction?.confidence ??
+        topCandidate?.score;
+
+      setConfidence(
+        typeof score === "number" &&
+          Number.isFinite(score) &&
+          score >= 0 &&
+          score <= 1
+          ? score
+          : null
       );
 
-      setGeneratedOccasion(occasion);
+      setDetails({
+        category: predictedCategory,
+        color:
+          result.predicted_attributes?.color
+            ?.value || "",
+        pattern:
+          result.predicted_attributes?.pattern
+            ?.value || "",
+        season: "all_season",
+        occasion: "",
+      });
 
-      setGenerated(true);
-
-    } catch (error) {
-
+      setPrediction(result);
+    } catch (err) {
       setError(
-        error instanceof Error
-          ? error.message
-          : "Unable to generate recommendations."
+        err instanceof Error
+          ? err.message
+          : "Unable to analyze the image."
       );
-
     } finally {
-
-      setLoading(false);
-
+      setAnalyzing(false);
     }
   }
 
-  // Reset recommendation filters
-  function resetFilters() {
+  function updateDetails(
+    field: keyof ClothingDetails,
+    value: string
+  ) {
+    setDetails((previous) => ({
+      ...previous,
+      [field]: value,
+    }));
 
-    setOccasion("college");
-    setLimit(5);
-    setOutfits([]);
-    setMessage("");
+    setConfirmed(false);
     setError("");
-    setGenerated(false);
-    setGeneratedOccasion("");
+  }
 
+  function handleConfirm() {
+    if (
+      !details.category ||
+      !details.color.trim() ||
+      !details.pattern.trim() ||
+      !details.season ||
+      !details.occasion
+    ) {
+      setError(
+        "Please complete all clothing details before confirming."
+      );
+      return;
+    }
+
+    setConfirmed(true);
+    setError("");
+  }
+
+  function handleReset() {
+    setFile(null);
+    setPreview(null);
+    setPrediction(null);
+    setDetails({ ...initialDetails });
+    setConfirmed(false);
+    setSuggestion("");
+    setConfidence(null);
+    setError("");
   }
 
   return (
-
-    <main className="min-h-screen bg-gray-50 p-6 text-[#172A4B]">
-
-      <div className="mx-auto max-w-7xl">
+    <main className="min-h-screen bg-gray-50 px-4 py-6 text-[#172A4B] sm:px-6 sm:py-10">
+      <div className="mx-auto max-w-5xl">
 
         {/* Back navigation */}
         <Link
-          href="/user/dashboard"
+          href="/user/wardrobe"
           className="mb-6 inline-flex items-center gap-2 text-sm font-medium hover:underline"
         >
           <ArrowLeft size={18} />
-          Back to Dashboard
+          Back to Wardrobe
         </Link>
 
         {/* Page heading */}
-        <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+        <div className="mb-8">
+          <h1 className="flex items-center gap-3 text-2xl font-bold sm:text-3xl">
+            <Sparkles
+              size={28}
+              className="shrink-0 text-[#8170C4]"
+            />
+            AI Clothing Recognition
+          </h1>
 
-          <div>
-
-            <h1 className="flex items-center gap-3 text-3xl font-bold">
-
-              <Sparkles
-                className="text-[#8170C4]"
-              />
-
-              Outfit Recommendations
-
-            </h1>
-
-            <p className="mt-2 text-gray-600">
-              Discover personalized outfits from
-              your digital wardrobe.
-            </p>
-
-          </div>
-
-          <Link
-            href="/user/wardrobe"
-            className="inline-flex items-center gap-2 rounded-lg bg-[#172A4B] px-5 py-3 text-white hover:bg-[#283F65]"
-          >
-
-            <Shirt size={18} />
-
-            My Wardrobe
-
-          </Link>
-
+          <p className="mt-3 text-sm text-gray-600 sm:text-base">
+            Upload a clothing photo, analyze it with AI,
+            and review the suggested details.
+          </p>
         </div>
 
-        {/* Recommendation filters */}
+        {/* Image upload */}
         <Card shadow="small">
-
-          <h2 className="mb-5 text-xl font-semibold">
-            Generate Your Outfit
+          <h2 className="mb-4 text-xl font-semibold">
+            Upload Clothing Image
           </h2>
 
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+          <label
+            className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#C9B9E8] bg-[#F8F5FC] p-5 text-center sm:p-8 ${
+              analyzing
+                ? "cursor-not-allowed opacity-70"
+                : "cursor-pointer"
+            }`}
+          >
+            {preview ? (
+              <>
+                <img
+                  src={preview}
+                  alt="Uploaded clothing preview"
+                  className="max-h-72 w-full rounded-lg object-contain"
+                />
 
-            {/* Occasion */}
-            <div>
+                <p className="mt-4 max-w-full break-all text-sm text-gray-600">
+                  {file?.name}
+                </p>
 
-              <label
-                htmlFor="occasion"
-                className="mb-2 block text-sm font-medium"
-              >
-                Select Occasion
-              </label>
+                <span className="mt-2 text-sm font-medium text-[#8170C4]">
+                  Click to change image
+                </span>
+              </>
+            ) : (
+              <>
+                <ImagePlus
+                  size={48}
+                  className="mb-4 text-[#8170C4]"
+                />
 
-              <select
-                id="occasion"
-                value={occasion}
-                disabled={loading}
-                onChange={(event) =>
-                  setOccasion(event.target.value)
-                }
-                className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 focus:border-[#8170C4] focus:outline-none"
-              >
+                <span className="font-medium">
+                  Click to upload a clothing image
+                </span>
 
-                {occasions.map((item) => (
+                <span className="mt-2 text-sm text-gray-500">
+                  JPEG, PNG or WEBP — maximum 5 MB
+                </span>
+              </>
+            )}
 
-                  <option
-                    key={item.value}
-                    value={item.value}
-                  >
-                    {item.label}
-                  </option>
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={handleImage}
+              disabled={analyzing}
+              className="sr-only"
+              aria-label="Upload clothing image"
+            />
+          </label>
 
-                ))}
-
-              </select>
-
-            </div>
-
-            {/* Number of outfits */}
-            <div>
-
-              <label
-                htmlFor="limit"
-                className="mb-2 block text-sm font-medium"
-              >
-                Number of Recommendations
-              </label>
-
-              <select
-                id="limit"
-                value={limit}
-                disabled={loading}
-                onChange={(event) =>
-                  setLimit(Number(event.target.value))
-                }
-                className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 focus:border-[#8170C4] focus:outline-none"
-              >
-
-                <option value={3}>
-                  3 Outfits
-                </option>
-
-                <option value={5}>
-                  5 Outfits
-                </option>
-
-                <option value={10}>
-                  10 Outfits
-                </option>
-
-                <option value={20}>
-                  20 Outfits
-                </option>
-
-              </select>
-
-            </div>
-
-          </div>
-
-          {/* Generate and reset buttons */}
+          {/* Action buttons */}
           <div className="mt-6 flex flex-wrap gap-3">
-
             <Button
               type="button"
               size="medium"
-              onClick={generateRecommendations}
-              disabled={loading}
+              onClick={handleAnalyze}
+              disabled={!file || analyzing}
             >
-
               <span className="inline-flex items-center gap-2">
-
-                {loading ? (
-
+                {analyzing ? (
                   <Loader2
                     size={18}
                     className="animate-spin"
                   />
-
                 ) : (
-
                   <Sparkles size={18} />
-
                 )}
 
-                {loading
-                  ? "Generating..."
-                  : "Generate Recommendations"}
-
+                {analyzing
+                  ? "Analyzing..."
+                  : "Analyze Image"}
               </span>
-
             </Button>
 
             <Button
               type="button"
               variant="outline"
               size="medium"
-              onClick={resetFilters}
-              disabled={loading}
+              onClick={handleReset}
+              disabled={analyzing}
             >
               Reset
             </Button>
-
           </div>
-
         </Card>
 
         {/* Loading state */}
-        {loading && (
-
+        {analyzing && (
           <div
             role="status"
-            className="mt-8 rounded-xl bg-white p-10 text-center shadow-sm"
+            className="mt-6 rounded-xl bg-white p-8 text-center shadow-sm"
           >
-
             <Loader2
-              size={40}
+              size={36}
               className="mx-auto mb-4 animate-spin text-[#8170C4]"
             />
 
-            <h3 className="text-lg font-semibold">
-              Generating your outfits...
+            <h3 className="font-semibold">
+              Analyzing your clothing image...
             </h3>
 
-            <p className="mt-2 text-gray-500">
-              Finding suitable clothing combinations
-              from your wardrobe.
+            <p className="mt-2 text-sm text-gray-500">
+              Please wait while AI processes your photo.
             </p>
-
           </div>
-
         )}
 
-        {/* Error state */}
+        {/* Error message */}
         {error && (
-
           <div
             role="alert"
-            className="mt-8 rounded-xl border border-red-100 bg-red-50 p-5"
+            className="mt-6 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
           >
-
-            <div className="flex items-center gap-2 text-red-700">
-
-              <AlertCircle size={20} />
-
-              <h3 className="font-semibold">
-                Unable to generate recommendations
-              </h3>
-
-            </div>
-
-            <p className="mt-2 text-sm text-red-600">
-              {error}
-            </p>
-
-            <div className="mt-4">
-
-              <Button
-                type="button"
-                size="medium"
-                onClick={generateRecommendations}
-              >
-                Try Again
-              </Button>
-
-            </div>
-
-          </div>
-
-        )}
-
-        {/* Initial state */}
-        {!generated && !loading && !error && (
-
-          <div className="mt-8 rounded-xl bg-white p-10 text-center shadow-sm">
-
-            <Sparkles
-              size={42}
-              className="mx-auto mb-4 text-[#8170C4]"
+            <AlertCircle
+              size={20}
+              className="shrink-0"
             />
 
-            <h3 className="text-lg font-semibold">
-              Ready to discover your next outfit?
-            </h3>
-
-            <p className="mt-2 text-gray-500">
-              Select an occasion and click Generate
-              Recommendations to get started.
-            </p>
-
+            <p>{error}</p>
           </div>
-
         )}
 
-        {/* Empty recommendation state */}
-        {generated &&
-          !loading &&
-          !error &&
-          outfits.length === 0 && (
+        {/* Recognition results */}
+        {prediction && !analyzing && (
+          <div className="mt-8">
+            <Card shadow="small">
 
-            <div className="mt-8 rounded-xl bg-white p-10 text-center shadow-sm">
+              <h2 className="mb-5 flex items-center gap-2 text-xl font-semibold">
+                <Sparkles
+                  size={22}
+                  className="text-[#8170C4]"
+                />
+                AI Recognition Results
+              </h2>
 
-              <Shirt
-                size={42}
-                className="mx-auto mb-4 text-[#8170C4]"
-              />
-
-              <h3 className="text-lg font-semibold">
-                No outfits found
-              </h3>
-
-              <p className="mx-auto mt-3 max-w-xl text-gray-500">
-
-                {message ||
-                  "Add more clothing items or try another occasion."}
-
-              </p>
-
-              <Link
-                href="/user/wardrobe/add"
-                className="mt-5 inline-flex items-center gap-2 rounded-lg bg-[#172A4B] px-5 py-3 text-white hover:bg-[#283F65]"
-              >
-
-                <Shirt size={18} />
-
-                Add Clothing
-
-              </Link>
-
-            </div>
-
-          )}
-
-        {/* Real recommended outfits */}
-        {generated &&
-          !loading &&
-          !error &&
-          outfits.length > 0 && (
-
-            <section className="mt-8">
-
-              <div className="mb-5">
-
-                <h2 className="text-2xl font-semibold">
-                  Recommended Outfits
-                </h2>
-
-                <p className="mt-2 text-sm text-gray-500">
-
-                  Showing {outfits.length} outfit
-                  {outfits.length === 1 ? "" : "s"}
-                  {" "}for {generatedOccasion}.
-
+              {/* AI category suggestion */}
+              <div className="mb-6 rounded-xl bg-[#F3F0FA] p-4">
+                <p className="text-sm font-semibold">
+                  AI Suggested Category
                 </p>
 
+                <p className="mt-2 text-lg font-bold">
+                  {suggestion ||
+                    "Category needs manual review"}
+                </p>
+
+                {confidence !== null && suggestion && (
+                  <p className="mt-1 text-sm text-gray-600">
+                    Model confidence:{" "}
+                    {(confidence * 100).toFixed(1)}%
+                  </p>
+                )}
+
+                <p className="mt-3 text-sm text-gray-600">
+                  AI suggestions may be incorrect.
+                  Review and confirm the clothing details
+                  before adding the item to your wardrobe.
+                </p>
               </div>
 
-              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              <h3 className="mb-4 text-lg font-semibold">
+                Review Clothing Details
+              </h3>
 
-                {outfits.map((outfit, index) => (
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
 
-                  <Card
-                    key={`${outfit.item_ids.join("-")}-${index}`}
-                    shadow="small"
+                {/* Category */}
+                <div>
+                  <label
+                    htmlFor="category"
+                    className="mb-2 block text-sm font-medium"
                   >
+                    Clothing Category
+                  </label>
 
-                    {/* Outfit heading */}
-                    <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+                  <select
+                    id="category"
+                    value={details.category}
+                    onChange={(event) =>
+                      updateDetails(
+                        "category",
+                        event.target.value
+                      )
+                    }
+                    className={fieldClass}
+                  >
+                    <option value="">
+                      Select category
+                    </option>
 
-                      <h3 className="text-xl font-semibold">
+                    {categories.map((item) => (
+                      <option
+                        key={item.value}
+                        value={item.value}
+                      >
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-                        Outfit {index + 1}
+                {/* Color */}
+                <div>
+                  <label
+                    htmlFor="color"
+                    className="mb-2 block text-sm font-medium"
+                  >
+                    Color
+                  </label>
 
-                      </h3>
+                  <input
+                    id="color"
+                    type="text"
+                    placeholder="e.g. Blue"
+                    value={details.color}
+                    onChange={(event) =>
+                      updateDetails(
+                        "color",
+                        event.target.value
+                      )
+                    }
+                    className={fieldClass}
+                  />
+                </div>
 
-                      <span className="rounded-full bg-[#EEE9FA] px-3 py-1 text-xs font-medium capitalize">
+                {/* Pattern */}
+                <div>
+                  <label
+                    htmlFor="pattern"
+                    className="mb-2 block text-sm font-medium"
+                  >
+                    Pattern
+                  </label>
 
-                        {generatedOccasion}
+                  <input
+                    id="pattern"
+                    type="text"
+                    placeholder="e.g. Solid, Striped"
+                    value={details.pattern}
+                    onChange={(event) =>
+                      updateDetails(
+                        "pattern",
+                        event.target.value
+                      )
+                    }
+                    className={fieldClass}
+                  />
+                </div>
 
-                      </span>
+                {/* Season */}
+                <div>
+                  <label
+                    htmlFor="season"
+                    className="mb-2 block text-sm font-medium"
+                  >
+                    Season
+                  </label>
 
-                    </div>
+                  <select
+                    id="season"
+                    value={details.season}
+                    onChange={(event) =>
+                      updateDetails(
+                        "season",
+                        event.target.value
+                      )
+                    }
+                    className={fieldClass}
+                  >
+                    {seasons.map((item) => (
+                      <option
+                        key={item.value}
+                        value={item.value}
+                      >
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-                    {/* Clothing items */}
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {/* Occasion */}
+                <div className="sm:col-span-2">
+                  <label
+                    htmlFor="occasion"
+                    className="mb-2 block text-sm font-medium"
+                  >
+                    Occasion
+                  </label>
 
-                      {outfit.items.map((item) => (
+                  <select
+                    id="occasion"
+                    value={details.occasion}
+                    onChange={(event) =>
+                      updateDetails(
+                        "occasion",
+                        event.target.value
+                      )
+                    }
+                    className={fieldClass}
+                  >
+                    <option value="">
+                      Select occasion
+                    </option>
 
-                        <div
-                          key={item.id}
-                          className="overflow-hidden rounded-xl border border-gray-100"
-                        >
+                    {occasions.map((item) => (
+                      <option
+                        key={item}
+                        value={item.toLowerCase()}
+                      >
+                        {item}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
 
-                          {/* Clothing image */}
-                          <div className="flex h-44 items-center justify-center bg-[#EEE9FA]">
+              <p className="mt-5 text-sm text-gray-500">
+                Color, pattern, season and occasion
+                should be reviewed manually.
+              </p>
 
-                            {item.image_path &&
-                            (
-                              item.image_path.startsWith("https://") ||
-                              item.image_path.startsWith("http://") ||
-                              item.image_path.startsWith("data:image/") ||
-                              item.image_path.startsWith("/")
-                            ) ? (
+              <div className="mt-6">
+                <Button
+                  type="button"
+                  size="medium"
+                  onClick={handleConfirm}
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <CheckCircle2 size={18} />
+                    Confirm Clothing Details
+                  </span>
+                </Button>
+              </div>
 
-                              <img
-                                src={item.image_path}
-                                alt={item.name || "Clothing item"}
-                                className="h-full w-full object-contain"
-                              />
+              {/* Confirmation */}
+              {confirmed && (
+                <div
+                  role="status"
+                  className="mt-6 rounded-xl border border-green-200 bg-green-50 p-5"
+                >
+                  <h3 className="flex items-center gap-2 font-semibold text-green-700">
+                    <CheckCircle2
+                      size={22}
+                      className="shrink-0"
+                    />
+                    Clothing Details Confirmed
+                  </h3>
 
-                            ) : (
-
-                              <Shirt
-                                size={48}
-                                className="text-[#8170C4]"
-                              />
-
-                            )}
-
-                          </div>
-
-                          {/* Clothing information */}
-                          <div className="p-4">
-
-                            <h4 className="font-semibold">
-
-                              {item.name || "Clothing item"}
-
-                            </h4>
-
-                            <p className="mt-2 text-sm text-gray-500">
-
-                              Category: {item.category || "Not specified"}
-
-                            </p>
-
-                            <p className="text-sm text-gray-500">
-
-                              Color: {item.color || "Not specified"}
-
-                            </p>
-
-                            <p className="text-sm text-gray-500">
-
-                              Season: {item.season || "Not specified"}
-
-                            </p>
-
-                          </div>
-
-                        </div>
-
-                      ))}
-
-                    </div>
-
-                    {/* Recommendation reason */}
-                    {(outfit.reason ||
-                      outfit.reasons?.length) ? (
-
-                      <div className="mt-5 rounded-lg bg-[#F3F0FA] p-4">
-
-                        <div className="mb-2 flex items-center gap-2">
-
-                          <Sparkles
-                            size={18}
-                            className="text-[#8170C4]"
-                          />
-
-                          <h4 className="font-semibold">
-                            Why this outfit?
-                          </h4>
-
-                        </div>
-
-                        <p className="text-sm text-gray-600">
-
-                          {outfit.reason ||
-                            outfit.reasons?.join("; ")}
-
-                        </p>
-
-                      </div>
-
-                    ) : null}
-
-                    {/* Model score */}
-                    {typeof outfit.score === "number" && (
-
-                      <p className="mt-4 text-sm text-gray-500">
-
-                        Recommendation score:{" "}
-                        {outfit.score.toFixed(2)}
-
-                      </p>
-
-                    )}
-
-                    <p className="mt-4 text-xs text-gray-500">
-                      Recommended from your personal wardrobe.
+                  <div className="mt-4 space-y-2 text-sm text-gray-700">
+                    <p>
+                      <strong>Category:</strong>{" "}
+                      {details.category}
                     </p>
 
-                  </Card>
+                    <p>
+                      <strong>Color:</strong>{" "}
+                      {details.color}
+                    </p>
 
-                ))}
+                    <p>
+                      <strong>Pattern:</strong>{" "}
+                      {details.pattern}
+                    </p>
 
-              </div>
+                    <p>
+                      <strong>Season:</strong>{" "}
+                      {
+                        seasons.find(
+                          (item) =>
+                            item.value ===
+                            details.season
+                        )?.label
+                      }
+                    </p>
 
-            </section>
+                    <p className="capitalize">
+                      <strong>Occasion:</strong>{" "}
+                      {details.occasion}
+                    </p>
+                  </div>
 
-          )}
+                  <p className="mt-4 text-sm text-gray-600">
+                    These details have been confirmed in
+                    the frontend. They have not yet been
+                    saved to your wardrobe.
+                  </p>
 
+                  <Link
+                    href="/user/wardrobe/add"
+                    className="mt-5 inline-flex rounded-lg bg-[#172A4B] px-5 py-3 text-sm font-medium text-white hover:bg-[#283F65]"
+                  >
+                    Open Add Clothing Form
+                  </Link>
+                </div>
+              )}
+            </Card>
+          </div>
+        )}
       </div>
-
     </main>
-
   );
 }
-
