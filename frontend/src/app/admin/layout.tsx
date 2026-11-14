@@ -1,65 +1,26 @@
-"use client";
-
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
-
-export default function AdminLayout({
-  children,
-}: {
-  children: ReactNode;
-}) {
-  const pathname = usePathname();
-
-  const menuItems = [
-    { name: "Dashboard", href: "/admin/dashboard" },
-    { name: "Users", href: "/admin/users" },
-    { name: "AI Monitoring", href: "/admin/ai-monitoring" },
-    { name: "Categories", href: "/admin/categories" },
-    { name: "Clothing", href: "/admin/clothing" },
-    { name: "Consultations", href: "/admin/consultations" },
-    { name: "Events", href: "/admin/events" },
-    { name: "Feedback", href: "/admin/feedback" },
-    { name: "Notifications", href: "/admin/notifications" },
-    { name: "Recommendations", href: "/admin/recommendations" },
-    { name: "Reports", href: "/admin/reports" },
-    { name: "Services", href: "/admin/services" },
-  ];
-
-  // Hide sidebar on admin login page
-  if (pathname === "/admin/login") {
-    return <>{children}</>;
-  }
-
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen flex bg-slate-100">
-
-      <aside className="w-64 bg-slate-900 text-white p-5">
-        <h1 className="text-2xl font-bold mb-8">
-          SmartWardrobe
-        </h1>
-
-        <p className="text-slate-400 text-sm mb-4">
-          ADMIN MENU
-        </p>
-
-        <nav className="space-y-2">
-          {menuItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="block px-4 py-3 rounded-lg hover:bg-blue-600 transition"
-            >
-              {item.name}
-            </Link>
-          ))}
-        </nav>
-      </aside>
-
-      <main className="flex-1 p-6 md:p-8">
-        {children}
-      </main>
-
+    <div style={{ background: "#f5f5f5", minHeight: "100vh", fontFamily: "sans-serif" }}>
+      <div style={{ width: "220px", background: "#111827", color: "white", padding: "20px", position: "fixed", top: 0, left: 0, bottom: 0, overflowY: "auto" }}>
+        <h2 style={{ fontSize: "20px", fontWeight: "bold", marginBottom: "20px" }}>SmartWardrobe</h2>
+        <p style={{ fontSize: "12px", color: "#9ca3af", marginBottom: "15px" }}>ADMIN MENU</p>
+        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+          <a href="/admin" style={{ color: "white", textDecoration: "none" }}>Dashboard</a>
+          <a href="/admin/users" style={{ color: "white", textDecoration: "none" }}>Users</a>
+          <a href="/admin/ai-monitoring" style={{ color: "white", textDecoration: "none" }}>AI Monitoring</a>
+          <a href="/admin/categories" style={{ color: "white", textDecoration: "none" }}>Categories</a>
+          <a href="/admin/clothing" style={{ color: "white", textDecoration: "none" }}>Clothing</a>
+          <a href="/admin/consultations" style={{ color: "white", textDecoration: "none" }}>Consultations</a>
+          <a href="/admin/events" style={{ color: "white", textDecoration: "none" }}>Events</a>
+          <a href="/admin/feedback" style={{ color: "white", textDecoration: "none" }}>Feedback</a>
+          <a href="/admin/notifications" style={{ color: "white", textDecoration: "none" }}>Notifications</a>
+          <a href="/admin/recommendations" style={{ color: "white", textDecoration: "none" }}>Recommendations</a>
+          <a href="/admin/reports" style={{ color: "white", textDecoration: "none" }}>Reports</a>
+          <a href="/admin/services" style={{ color: "white", textDecoration: "none" }}>Services</a>
+          <a href="/admin/settings" style={{ color: "white", textDecoration: "none" }}>Settings</a>
+        </div>
+      </div>
+      <div style={{ marginLeft: "220px", padding: "20px", color: "#111827", background: "white", minHeight: "100vh" }}>{children}</div>
     </div>
   );
 }
